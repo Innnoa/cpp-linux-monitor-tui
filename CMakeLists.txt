@@ -21,7 +21,9 @@ add_library(monitor_core STATIC
   src/collector/cpu_collector.cpp
   src/collector/disk_collector.cpp
   src/collector/memory_collector.cpp
-  src/collector/network_collector.cpp)
+  src/collector/network_collector.cpp
+  src/collector/process_collector.cpp
+  src/ui/app_controller.cpp)
 target_include_directories(monitor_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 add_executable(monitor_tui src/main.cpp)
@@ -53,7 +55,9 @@ if(BUILD_TESTING)
   add_executable(monitor_tests
     tests/app/app_config_test.cpp
     tests/store/snapshot_store_test.cpp
-    tests/collector/system_collectors_test.cpp)
+    tests/collector/system_collectors_test.cpp
+    tests/collector/process_collector_test.cpp
+    tests/ui/app_controller_test.cpp)
   target_link_libraries(monitor_tests PRIVATE monitor_core Catch2::Catch2WithMain)
 
   if(MONITOR_USE_CATCH_MODULE)
