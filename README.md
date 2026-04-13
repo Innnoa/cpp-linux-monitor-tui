@@ -15,7 +15,15 @@ cmake --build build
 ./build/monitor_tui
 ~~~
 
-## Default controls
+## Current status
+
+The current milestone starts the binary and prints a placeholder message:
+
+`replace bootstrap with FTXUI event loop`
+
+The full interactive dashboard shell is scaffolded in code, but the runtime event loop is not wired yet.
+
+## Planned controls
 
 - `h/l` or `Tab` / `Shift-Tab`: move focus
 - `j/k`: move process selection
