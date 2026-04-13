@@ -17,13 +17,11 @@ cmake --build build
 
 ## Current status
 
-The current milestone starts the binary and prints a placeholder message:
+- In a real TTY, `monitor_tui` runs a minimal live dashboard loop and refreshes from local `/proc` data.
+- In a non-interactive environment, it renders one snapshot and exits so smoke checks do not hang.
+- The current runtime supports quitting with `q`, opening filter/command modes, and showing `kill` / `renice` prompts for the top listed process.
 
-`replace bootstrap with FTXUI event loop`
-
-The full interactive dashboard shell is scaffolded in code, but the runtime event loop is not wired yet.
-
-## Planned controls
+## Current controls
 
 - `h/l` or `Tab` / `Shift-Tab`: move focus
 - `j/k`: move process selection
@@ -31,5 +29,7 @@ The full interactive dashboard shell is scaffolded in code, but the runtime even
 - `/`: open filter
 - `s`: cycle sort
 - `:`: command bar
-- `K`: confirm `kill`
-- `R`: submit `renice`
+- `K`: show `kill` confirmation for the top listed process
+- `R`: show `renice` prompt for the top listed process
+- `Esc`: leave filter / command / confirm modes
+- `q`: quit
