@@ -16,8 +16,8 @@ if(Catch2_FOUND AND Catch2_DIR)
   set(CATCH_EXTRA_MODULE_DIR ${Catch2_DIR}/extras)
 endif()
 
-add_library(monitor_core INTERFACE)
-target_include_directories(monitor_core INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/src)
+add_library(monitor_core STATIC src/store/snapshot_store.cpp)
+target_include_directories(monitor_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 add_executable(monitor_tui src/main.cpp)
 target_link_libraries(monitor_tui PRIVATE monitor_core)
@@ -45,7 +45,7 @@ if(BUILD_TESTING)
     set(MONITOR_USE_CATCH_MODULE ON)
   endif()
 
-  add_executable(monitor_tests tests/app/app_config_test.cpp)
+  add_executable(monitor_tests tests/app/app_config_test.cpp tests/store/snapshot_store_test.cpp)
   target_link_libraries(monitor_tests PRIVATE monitor_core Catch2::Catch2WithMain)
 
   if(MONITOR_USE_CATCH_MODULE)
