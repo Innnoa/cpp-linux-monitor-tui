@@ -1,6 +1,7 @@
-#include <iostream>
+#include "app/app_config.h"
+#include "app/application.h"
 
 int main() {
-    std::cout << "monitor_tui bootstrap\n";
-    return 0;
+    monitor::app::Application app(monitor::app::AppConfig::defaults());
+    return app.run();
 }

@@ -52,6 +52,8 @@ endif()
 
 set(MONITOR_CORE_SOURCES
   src/store/snapshot_store.cpp
+  src/app/application.cpp
+  src/app/sampling_worker.cpp
   src/collector/cpu_collector.cpp
   src/collector/disk_collector.cpp
   src/collector/memory_collector.cpp
@@ -97,6 +99,7 @@ if(BUILD_TESTING)
 
   set(MONITOR_TEST_SOURCES
     tests/app/app_config_test.cpp
+    tests/app/application_test.cpp
     tests/store/snapshot_store_test.cpp
     tests/collector/system_collectors_test.cpp
     tests/collector/process_collector_test.cpp
