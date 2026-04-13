@@ -26,8 +26,10 @@ model::MemoryMetrics parse_memory_info(std::string_view text) {
         }
     }
 
-    metrics.used_bytes = metrics.total_bytes - mem_available;
-    metrics.swap_used_bytes = metrics.swap_total_bytes - swap_free;
+    metrics.used_bytes =
+        (metrics.total_bytes > mem_available) ? (metrics.total_bytes - mem_available) : 0ULL;
+    metrics.swap_used_bytes =
+        (metrics.swap_total_bytes > swap_free) ? (metrics.swap_total_bytes - swap_free) : 0ULL;
     return metrics;
 }
 

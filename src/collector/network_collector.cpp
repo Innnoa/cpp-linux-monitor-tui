@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <sstream>
+#include <unordered_map>
 
 namespace monitor::collector {
 
@@ -31,11 +32,23 @@ std::vector<model::NetworkMetrics> compute_network_metrics(
     const std::vector<NetworkCounters>& previous,
     const std::vector<NetworkCounters>& current) {
     std::vector<model::NetworkMetrics> metrics;
-    for (std::size_t index = 0; index < current.size(); ++index) {
+    std::unordered_map<std::string, NetworkCounters> previous_by_interface;
+    previous_by_interface.reserve(previous.size());
+    for (const auto& counter : previous) {
+        previous_by_interface.emplace(counter.interface_name, counter);
+    }
+
+    for (const auto& counter : current) {
+        const auto previous_it = previous_by_interface.find(counter.interface_name);
+        if (previous_it == previous_by_interface.end()) {
+            continue;
+        }
+
+        const auto& previous_counter = previous_it->second;
         model::NetworkMetrics metric;
-        metric.interface_name = current.at(index).interface_name;
-        metric.rx_bytes_per_sec = current.at(index).rx_bytes - previous.at(index).rx_bytes;
-        metric.tx_bytes_per_sec = current.at(index).tx_bytes - previous.at(index).tx_bytes;
+        metric.interface_name = counter.interface_name;
+        metric.rx_bytes_per_sec = counter.rx_bytes - previous_counter.rx_bytes;
+        metric.tx_bytes_per_sec = counter.tx_bytes - previous_counter.tx_bytes;
         metrics.push_back(metric);
     }
     return metrics;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string_view>
 #include <vector>
 
@@ -12,6 +13,7 @@ struct CpuTimes {
     std::uint64_t nice{0};
     std::uint64_t system{0};
     std::uint64_t idle{0};
+    std::uint64_t iowait{0};
 };
 
 struct CpuSample {

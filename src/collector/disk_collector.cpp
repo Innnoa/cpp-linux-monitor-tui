@@ -2,6 +2,7 @@
 
 #include <limits>
 #include <sstream>
+#include <unordered_map>
 
 namespace monitor::collector {
 
@@ -32,13 +33,25 @@ std::vector<model::DiskMetrics> compute_disk_metrics(
     const std::vector<DiskCounters>& current,
     std::string mount_label) {
     std::vector<model::DiskMetrics> metrics;
-    for (std::size_t index = 0; index < current.size(); ++index) {
+    std::unordered_map<std::string, DiskCounters> previous_by_device;
+    previous_by_device.reserve(previous.size());
+    for (const auto& counter : previous) {
+        previous_by_device.emplace(counter.device, counter);
+    }
+
+    for (const auto& counter : current) {
+        const auto previous_it = previous_by_device.find(counter.device);
+        if (previous_it == previous_by_device.end()) {
+            continue;
+        }
+
+        const auto& previous_counter = previous_it->second;
         model::DiskMetrics metric;
         metric.label = mount_label;
         metric.read_bytes_per_sec =
-            (current.at(index).read_sectors - previous.at(index).read_sectors) * 512ULL;
+            (counter.read_sectors - previous_counter.read_sectors) * 512ULL;
         metric.write_bytes_per_sec =
-            (current.at(index).write_sectors - previous.at(index).write_sectors) * 512ULL;
+            (counter.write_sectors - previous_counter.write_sectors) * 512ULL;
         metrics.push_back(metric);
     }
     return metrics;
