@@ -15,6 +15,7 @@ void AppController::handle_key(int key) {
     }
 
     if (mode_ == InputMode::Command && key == 27) {
+        command_text_.clear();
         mode_ = InputMode::Normal;
         return;
     }
@@ -47,7 +48,13 @@ void AppController::handle_text(std::string text) {
     if (mode_ == InputMode::Filter) {
         filter_query_ = std::move(text);
     } else if (mode_ == InputMode::Command) {
-        command_text_ = ":" + text;
+        if (text.empty()) {
+            command_text_ = ":";
+        } else if (text.front() == ':') {
+            command_text_ = std::move(text);
+        } else {
+            command_text_ = ":" + text;
+        }
     }
 }
 

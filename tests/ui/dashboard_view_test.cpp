@@ -1,7 +1,6 @@
 #include <string>
 
 #include <catch2/catch_test_macros.hpp>
-#include <ftxui/component/screen_interactive.hpp>
 #include <ftxui/dom/elements.hpp>
 
 #include "app/app_config.h"
