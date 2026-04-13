@@ -1,4 +1,8 @@
 /build/
+/build-default/
+/build-review-head-default/
+/build-review-head-tests-offline/
 /out/
 /.cache/
 /compile_commands.json
+/.worktrees/
