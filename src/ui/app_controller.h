@@ -29,6 +29,7 @@ class AppController {
 
     [[nodiscard]] app::FocusZone focus() const;
     [[nodiscard]] InputMode mode() const;
+    [[nodiscard]] std::chrono::milliseconds refresh_interval() const;
     [[nodiscard]] std::string command_text() const;
     [[nodiscard]] std::string status_text() const;
     [[nodiscard]] std::string filter_query() const;

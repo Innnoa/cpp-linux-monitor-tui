@@ -37,7 +37,7 @@ std::string render_dashboard_to_string(
     const auto header = ftxui::hbox({
         ftxui::text("host: local"),
         ftxui::separator(),
-        ftxui::text("refresh 1000ms"),
+        ftxui::text("refresh " + std::to_string(controller.refresh_interval().count()) + "ms"),
         ftxui::separator(),
         ftxui::text("tab: proc"),
     });
@@ -77,8 +77,13 @@ std::string render_dashboard_to_string(
         ftxui::text("h/l focus · / filter · : command · K kill · R renice · q quit"),
     }));
 
+    auto command_display = controller.command_text();
+    if (controller.mode() == InputMode::Filter) {
+        command_display = "/" + controller.filter_query();
+    }
+
     const auto bottom = ftxui::hbox({
-        ftxui::window(ftxui::text("Command Bar"), ftxui::text(controller.command_text())),
+        ftxui::window(ftxui::text("Command Bar"), ftxui::text(command_display)),
         ftxui::window(ftxui::text("Status"), ftxui::text(controller.status_text())),
     });
 

@@ -10,6 +10,7 @@ AppController::AppController(app::AppConfig config)
 void AppController::handle_key(int key) {
     if (mode_ == InputMode::Filter && key == 27) {
         filter_query_.clear();
+        status_text_ = "ready";
         mode_ = InputMode::Normal;
         return;
     }
@@ -38,6 +39,7 @@ void AppController::handle_key(int key) {
 
     if (key == '/') {
         mode_ = InputMode::Filter;
+        status_text_ = "Filter mode";
         return;
     }
 
@@ -114,6 +116,7 @@ void AppController::set_status_text(std::string text) { status_text_ = std::move
 
 app::FocusZone AppController::focus() const { return focus_; }
 InputMode AppController::mode() const { return mode_; }
+std::chrono::milliseconds AppController::refresh_interval() const { return config_.refresh_interval; }
 std::string AppController::command_text() const { return command_text_; }
 std::string AppController::status_text() const { return status_text_; }
 std::string AppController::filter_query() const { return filter_query_; }

@@ -31,6 +31,19 @@ TEST_CASE("dashboard renders the approved panel layout") {
     CHECK(output.find("Command Bar") != std::string::npos);
     CHECK(output.find("Status") != std::string::npos);
     CHECK(output.find("ready") != std::string::npos);
+    CHECK(output.find("refresh 1000ms") != std::string::npos);
     CHECK(output.find(":sort cpu") != std::string::npos);
     CHECK(output.find("postgres") != std::string::npos);
+}
+
+TEST_CASE("dashboard shows filter text while in filter mode") {
+    monitor::model::SystemSnapshot snapshot;
+    monitor::ui::AppController controller(monitor::app::AppConfig::defaults());
+    controller.handle_key('/');
+    controller.handle_text("postgres");
+
+    const auto output = monitor::ui::render_dashboard_to_string(snapshot, controller, 120, 40);
+
+    CHECK(output.find("/postgres") != std::string::npos);
+    CHECK(output.find("Filter mode") != std::string::npos);
 }
