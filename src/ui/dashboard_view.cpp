@@ -1,11 +1,25 @@
 #include "ui/dashboard_view.h"
 
+#include <iomanip>
+#include <sstream>
+
 #include <ftxui/dom/elements.hpp>
 #include <ftxui/screen/screen.hpp>
 
 namespace monitor::ui {
 
 namespace {
+std::string format_percent(double value) {
+    std::ostringstream output;
+    output << std::fixed << std::setprecision(0) << value << "%";
+    return output.str();
+}
+
+std::string format_mb(std::uint64_t bytes) {
+    const auto mb = bytes / (1024ULL * 1024ULL);
+    return std::to_string(mb) + " MB";
+}
+
 ftxui::Element resource_box(const std::string& title, const std::string& summary) {
     return ftxui::window(ftxui::text(title), ftxui::vbox({
         ftxui::text(summary),
@@ -17,7 +31,7 @@ ftxui::Element resource_box(const std::string& title, const std::string& summary
 
 std::string render_dashboard_to_string(
     const model::SystemSnapshot& snapshot,
-    const AppController& /*controller*/,
+    const AppController& controller,
     int width,
     int height) {
     const auto header = ftxui::hbox({
@@ -28,20 +42,44 @@ std::string render_dashboard_to_string(
         ftxui::text("tab: proc"),
     });
 
+    const auto cpu_summary = format_percent(snapshot.cpu.total_percent);
+    const auto memory_summary =
+        format_mb(snapshot.memory.used_bytes) + " / " + format_mb(snapshot.memory.total_bytes);
+    std::string disk_summary = "n/a";
+    if (!snapshot.disks.empty()) {
+        const auto& disk = snapshot.disks.front();
+        disk_summary = disk.label + " " + format_percent(disk.used_percent);
+    }
+    std::string network_summary = "n/a";
+    if (!snapshot.interfaces.empty()) {
+        const auto& network = snapshot.interfaces.front();
+        network_summary = network.interface_name + " " + format_mb(network.rx_bytes_per_sec) + "/s";
+    }
+
     const auto resources = ftxui::gridbox({
-        {resource_box("CPU", "37%"), resource_box("Memory", "31 / 64 GB")},
-        {resource_box("Disk", "/ 71%"), resource_box("Network", "eth0 12 MB/s")},
+        {resource_box("CPU", cpu_summary), resource_box("Memory", memory_summary)},
+        {resource_box("Disk", disk_summary), resource_box("Network", network_summary)},
     });
+
+    std::string process_line = "no processes";
+    if (!snapshot.processes.empty()) {
+        const auto& process = snapshot.processes.front();
+        std::ostringstream line;
+        line << process.pid << "   " << process.state << "   " << std::fixed << std::setprecision(0)
+             << process.cpu_percent << "    " << std::setprecision(1) << process.memory_percent << "   "
+             << process.user << "    " << process.name;
+        process_line = line.str();
+    }
 
     const auto processes = ftxui::window(ftxui::text("Processes"), ftxui::vbox({
         ftxui::text("PID   S   CPU   MEM   USER    NAME"),
-        ftxui::text("812   R   98    2.1   root    postgres"),
+        ftxui::text(process_line),
         ftxui::text("j/k move · gg/G jump · / filter · s sort · K kill · R renice"),
     }));
 
     const auto bottom = ftxui::hbox({
-        ftxui::window(ftxui::text("Command Bar"), ftxui::text(":sort cpu")),
-        ftxui::window(ftxui::text("Status"), ftxui::text("ready")),
+        ftxui::window(ftxui::text("Command Bar"), ftxui::text(controller.command_text())),
+        ftxui::window(ftxui::text("Status"), ftxui::text(controller.status_text())),
     });
 
     auto document = ftxui::vbox({header, ftxui::separator(), resources, ftxui::separator(), processes, bottom});

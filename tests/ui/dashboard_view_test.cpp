@@ -19,6 +19,8 @@ TEST_CASE("dashboard renders the approved panel layout") {
     snapshot.processes.push_back({812, 'R', 98.0, 2.1, 0, "root", "postgres"});
 
     monitor::ui::AppController controller(monitor::app::AppConfig::defaults());
+    controller.handle_key(':');
+    controller.handle_text("sort cpu");
     const auto output = monitor::ui::render_dashboard_to_string(snapshot, controller, 120, 40);
 
     CHECK(output.find("CPU") != std::string::npos);
@@ -27,4 +29,9 @@ TEST_CASE("dashboard renders the approved panel layout") {
     CHECK(output.find("Network") != std::string::npos);
     CHECK(output.find("Processes") != std::string::npos);
     CHECK(output.find("j/k move") != std::string::npos);
+    CHECK(output.find("Command Bar") != std::string::npos);
+    CHECK(output.find("Status") != std::string::npos);
+    CHECK(output.find("ready") != std::string::npos);
+    CHECK(output.find(":sort cpu") != std::string::npos);
+    CHECK(output.find("postgres") != std::string::npos);
 }
