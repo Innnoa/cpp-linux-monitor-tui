@@ -30,6 +30,17 @@ model::ProcessInfo parse_process_info(
     info.name = std::string{stat_text.substr(open + 1, close - open - 1)};
     info.state = close + 2 < stat_text.size() ? stat_text[close + 2] : 'S';
 
+    if (open != std::string_view::npos && close != std::string_view::npos && close + 4 < stat_text.size()) {
+        std::istringstream stat_stream(std::string{stat_text.substr(close + 4)});
+        long value = 0;
+        for (int field = 4; stat_stream >> value; ++field) {
+            if (field == 19) {
+                info.nice_value = static_cast<int>(value);
+                break;
+            }
+        }
+    }
+
     std::istringstream status_stream(std::string{status_text});
     std::string label;
     while (status_stream >> label) {
@@ -38,7 +49,7 @@ model::ProcessInfo parse_process_info(
             std::string unit;
             status_stream >> rss_kb >> unit;
             info.memory_percent =
-                (static_cast<double>(rss_kb) / static_cast<double>(total_memory_bytes)) * 100.0;
+                (static_cast<double>(rss_kb) * 1024.0 / static_cast<double>(total_memory_bytes)) * 100.0;
         } else if (label == "Uid:") {
             int uid = 0;
             status_stream >> uid;

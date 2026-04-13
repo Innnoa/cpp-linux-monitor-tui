@@ -5,7 +5,7 @@
 
 TEST_CASE("process collector parses /proc status and stat lines") {
     constexpr std::string_view stat =
-        "812 (postgres) R 1 1 1 0 0 0 0 0 0 0 0 300 200 0 0 5 0 1 0 0 8192 0\n";
+        "812 (postgres) R 1 1 1 0 0 0 0 0 0 0 300 200 0 0 5 7 1 0 0 8192 0\n";
     constexpr std::string_view status =
         "Name:\tpostgres\n"
         "State:\tR (running)\n"
@@ -22,5 +22,6 @@ TEST_CASE("process collector parses /proc status and stat lines") {
     CHECK(info.pid == 812);
     CHECK(info.name == "postgres");
     CHECK(info.state == 'R');
-    CHECK(info.memory_percent == Catch::Approx(0.0244).margin(0.001));
+    CHECK(info.nice_value == 7);
+    CHECK(info.memory_percent == Catch::Approx(25.0).margin(0.001));
 }

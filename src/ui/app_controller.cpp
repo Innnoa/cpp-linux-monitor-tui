@@ -1,5 +1,7 @@
 #include "ui/app_controller.h"
 
+#include <utility>
+
 namespace monitor::ui {
 
 AppController::AppController(app::AppConfig config)
