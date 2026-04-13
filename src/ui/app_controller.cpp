@@ -75,12 +75,24 @@ void AppController::handle_text(std::string text) {
 }
 
 void AppController::begin_kill(int pid) {
+    if (pid <= 0) {
+        selected_pid_ = 0;
+        status_text_ = "ready";
+        mode_ = InputMode::Normal;
+        return;
+    }
     selected_pid_ = pid;
     mode_ = InputMode::ConfirmKill;
     status_text_ = "Kill PID " + std::to_string(pid) + "? [y/N]";
 }
 
 void AppController::begin_renice(int pid) {
+    if (pid <= 0) {
+        selected_pid_ = 0;
+        status_text_ = "ready";
+        mode_ = InputMode::Normal;
+        return;
+    }
     selected_pid_ = pid;
     mode_ = InputMode::Renice;
     status_text_ = "Enter new nice value";

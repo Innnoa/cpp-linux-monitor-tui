@@ -9,9 +9,17 @@ class FakeMutator final : public monitor::actions::ProcessMutator {
   public:
     std::error_code signal_error{};
     std::error_code renice_error{};
+    int signal_calls{0};
+    int renice_calls{0};
 
-    std::error_code send_signal(int, int) override { return signal_error; }
-    std::error_code set_priority(int, int) override { return renice_error; }
+    std::error_code send_signal(int, int) override {
+        ++signal_calls;
+        return signal_error;
+    }
+    std::error_code set_priority(int, int) override {
+        ++renice_calls;
+        return renice_error;
+    }
 };
 }  // namespace
 
@@ -34,6 +42,7 @@ TEST_CASE("kill action rejects invalid pid") {
 
     CHECK_FALSE(result.ok);
     CHECK(result.message == "invalid pid");
+    CHECK(mutator.signal_calls == 0);
 }
 
 TEST_CASE("kill action maps no such process") {
@@ -55,6 +64,7 @@ TEST_CASE("kill action returns ok on success") {
 
     CHECK(result.ok);
     CHECK(result.message == "ok");
+    CHECK(mutator.signal_calls == 1);
 }
 
 TEST_CASE("renice action rejects values outside the Linux nice range") {
@@ -75,4 +85,27 @@ TEST_CASE("renice action rejects invalid pid") {
 
     CHECK_FALSE(result.ok);
     CHECK(result.message == "invalid pid");
+    CHECK(mutator.renice_calls == 0);
+}
+
+TEST_CASE("renice action maps no such process") {
+    FakeMutator mutator;
+    mutator.renice_error = std::make_error_code(std::errc::no_such_process);
+    monitor::actions::ProcessActions actions(mutator);
+
+    const auto result = actions.renice_process(812, 0);
+
+    CHECK_FALSE(result.ok);
+    CHECK(result.message == "process no longer exists");
+}
+
+TEST_CASE("renice action returns ok on success") {
+    FakeMutator mutator;
+    monitor::actions::ProcessActions actions(mutator);
+
+    const auto result = actions.renice_process(812, 0);
+
+    CHECK(result.ok);
+    CHECK(result.message == "ok");
+    CHECK(mutator.renice_calls == 1);
 }
