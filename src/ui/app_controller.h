@@ -24,6 +24,8 @@ class AppController {
 
     [[nodiscard]] app::FocusZone focus() const;
     [[nodiscard]] InputMode mode() const;
+    [[nodiscard]] std::string command_text() const;
+    [[nodiscard]] std::string status_text() const;
     [[nodiscard]] std::string filter_query() const;
     [[nodiscard]] collector::ProcessSortKey sort_key() const;
 
@@ -33,6 +35,8 @@ class AppController {
     InputMode mode_{InputMode::Normal};
     collector::ProcessSortKey sort_key_{collector::ProcessSortKey::Cpu};
     std::string filter_query_;
+    std::string command_text_;
+    std::string status_text_{"ready"};
 };
 
 }  // namespace monitor::ui

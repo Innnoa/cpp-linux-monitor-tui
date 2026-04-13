@@ -1,0 +1,30 @@
+#include <string>
+
+#include <catch2/catch_test_macros.hpp>
+#include <ftxui/component/screen_interactive.hpp>
+#include <ftxui/dom/elements.hpp>
+
+#include "app/app_config.h"
+#include "model/system_snapshot.h"
+#include "ui/app_controller.h"
+#include "ui/dashboard_view.h"
+
+TEST_CASE("dashboard renders the approved panel layout") {
+    monitor::model::SystemSnapshot snapshot;
+    snapshot.cpu.total_percent = 37.0;
+    snapshot.memory.total_bytes = 64ULL * 1024ULL * 1024ULL;
+    snapshot.memory.used_bytes = 31ULL * 1024ULL * 1024ULL;
+    snapshot.disks.push_back({"/", 71.0, 21 * 1024ULL * 1024ULL, 13 * 1024ULL * 1024ULL});
+    snapshot.interfaces.push_back({"eth0", 12 * 1024ULL * 1024ULL, 2 * 1024ULL * 1024ULL});
+    snapshot.processes.push_back({812, 'R', 98.0, 2.1, 0, "root", "postgres"});
+
+    monitor::ui::AppController controller(monitor::app::AppConfig::defaults());
+    const auto output = monitor::ui::render_dashboard_to_string(snapshot, controller, 120, 40);
+
+    CHECK(output.find("CPU") != std::string::npos);
+    CHECK(output.find("Memory") != std::string::npos);
+    CHECK(output.find("Disk") != std::string::npos);
+    CHECK(output.find("Network") != std::string::npos);
+    CHECK(output.find("Processes") != std::string::npos);
+    CHECK(output.find("j/k move") != std::string::npos);
+}

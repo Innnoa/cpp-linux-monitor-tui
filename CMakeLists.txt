@@ -10,13 +10,30 @@ option(MONITOR_FETCH_DEPS "Allow CMake to fetch missing third-party dependencies
 
 include(CTest)
 
+set(MONITOR_HAS_FTXUI OFF)
+find_package(ftxui CONFIG QUIET)
+if(ftxui_FOUND)
+  set(MONITOR_HAS_FTXUI ON)
+elseif(MONITOR_FETCH_DEPS)
+  include(FetchContent)
+  FetchContent_Declare(
+    ftxui
+    GIT_REPOSITORY https://github.com/ArthurSonzogni/FTXUI.git
+    GIT_TAG v5.0.0
+  )
+  FetchContent_MakeAvailable(ftxui)
+  set(MONITOR_HAS_FTXUI ON)
+else()
+  message(STATUS "FTXUI not found; dashboard renderer will be disabled.")
+endif()
+
 find_package(Catch2 3 CONFIG QUIET)
 set(CATCH_EXTRA_MODULE_DIR "")
 if(Catch2_FOUND AND Catch2_DIR)
   set(CATCH_EXTRA_MODULE_DIR ${Catch2_DIR}/extras)
 endif()
 
-add_library(monitor_core STATIC
+set(MONITOR_CORE_SOURCES
   src/store/snapshot_store.cpp
   src/collector/cpu_collector.cpp
   src/collector/disk_collector.cpp
@@ -24,7 +41,15 @@ add_library(monitor_core STATIC
   src/collector/network_collector.cpp
   src/collector/process_collector.cpp
   src/ui/app_controller.cpp)
+if(MONITOR_HAS_FTXUI)
+  list(APPEND MONITOR_CORE_SOURCES src/ui/dashboard_view.cpp)
+endif()
+
+add_library(monitor_core STATIC ${MONITOR_CORE_SOURCES})
 target_include_directories(monitor_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+if(MONITOR_HAS_FTXUI)
+  target_link_libraries(monitor_core PUBLIC ftxui::dom ftxui::screen)
+endif()
 
 add_executable(monitor_tui src/main.cpp)
 target_link_libraries(monitor_tui PRIVATE monitor_core)
@@ -52,13 +77,23 @@ if(BUILD_TESTING)
     set(MONITOR_USE_CATCH_MODULE ON)
   endif()
 
-  add_executable(monitor_tests
+  set(MONITOR_TEST_SOURCES
     tests/app/app_config_test.cpp
     tests/store/snapshot_store_test.cpp
     tests/collector/system_collectors_test.cpp
     tests/collector/process_collector_test.cpp
     tests/ui/app_controller_test.cpp)
+  if(MONITOR_HAS_FTXUI)
+    list(APPEND MONITOR_TEST_SOURCES tests/ui/dashboard_view_test.cpp)
+  else()
+    message(STATUS "FTXUI not found; dashboard_view_test disabled.")
+  endif()
+
+  add_executable(monitor_tests ${MONITOR_TEST_SOURCES})
   target_link_libraries(monitor_tests PRIVATE monitor_core Catch2::Catch2WithMain)
+  if(MONITOR_HAS_FTXUI)
+    target_link_libraries(monitor_tests PRIVATE ftxui::component)
+  endif()
 
   if(MONITOR_USE_CATCH_MODULE)
     catch_discover_tests(monitor_tests)

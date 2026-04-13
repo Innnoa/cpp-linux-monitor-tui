@@ -19,6 +19,12 @@ void AppController::handle_key(int key) {
         return;
     }
 
+    if (key == ':') {
+        mode_ = InputMode::Command;
+        command_text_ = ":";
+        return;
+    }
+
     if (key == 'h') {
         focus_ = focus_ == app::FocusZone::Cpu ? app::FocusZone::CommandBar
                                                : static_cast<app::FocusZone>(static_cast<int>(focus_) - 1);
@@ -40,6 +46,8 @@ void AppController::handle_text(std::string text) {
 
 app::FocusZone AppController::focus() const { return focus_; }
 InputMode AppController::mode() const { return mode_; }
+std::string AppController::command_text() const { return command_text_; }
+std::string AppController::status_text() const { return status_text_; }
 std::string AppController::filter_query() const { return filter_query_; }
 collector::ProcessSortKey AppController::sort_key() const { return sort_key_; }
 
