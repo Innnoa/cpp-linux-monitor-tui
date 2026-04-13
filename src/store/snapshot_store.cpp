@@ -1,3 +1,5 @@
+#include <utility>
+
 #include "store/snapshot_store.h"
 
 namespace monitor::store {
