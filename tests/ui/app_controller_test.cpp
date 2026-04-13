@@ -25,6 +25,9 @@ TEST_CASE("controller cycles focus and filter state with vim-style keys") {
     CHECK(controller.mode() == monitor::ui::InputMode::Command);
     controller.handle_text("sort cpu");
     CHECK(controller.command_text() == ":sort cpu");
+    controller.handle_key('/');
+    CHECK(controller.mode() == monitor::ui::InputMode::Command);
+    CHECK(controller.command_text() == ":sort cpu");
     controller.handle_key(27);
     CHECK(controller.mode() == monitor::ui::InputMode::Normal);
     CHECK(controller.command_text().empty());

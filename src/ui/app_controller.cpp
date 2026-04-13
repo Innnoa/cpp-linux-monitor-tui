@@ -13,10 +13,16 @@ void AppController::handle_key(int key) {
         mode_ = InputMode::Normal;
         return;
     }
+    if (mode_ == InputMode::Filter) {
+        return;
+    }
 
     if (mode_ == InputMode::Command && key == 27) {
         command_text_.clear();
         mode_ = InputMode::Normal;
+        return;
+    }
+    if (mode_ == InputMode::Command) {
         return;
     }
 
