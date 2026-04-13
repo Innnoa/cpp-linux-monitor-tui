@@ -110,6 +110,8 @@ void AppController::submit_renice(int /*nice_value*/) {
     mode_ = InputMode::Normal;
 }
 
+void AppController::set_status_text(std::string text) { status_text_ = std::move(text); }
+
 app::FocusZone AppController::focus() const { return focus_; }
 InputMode AppController::mode() const { return mode_; }
 std::string AppController::command_text() const { return command_text_; }

@@ -25,6 +25,7 @@ class AppController {
     void begin_renice(int pid);
     void confirm_kill();
     void submit_renice(int nice_value);
+    void set_status_text(std::string text);
 
     [[nodiscard]] app::FocusZone focus() const;
     [[nodiscard]] InputMode mode() const;

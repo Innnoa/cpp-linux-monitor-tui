@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "app/sampling_worker.h"
+#include "actions/process_actions.h"
 #include "collector/cpu_collector.h"
 #include "collector/disk_collector.h"
 #include "collector/memory_collector.h"
@@ -62,8 +63,14 @@ bool is_numeric_directory_name(const std::string& name) {
 std::vector<model::ProcessInfo> collect_processes(std::uint64_t total_memory_bytes, long clock_ticks_per_second) {
     std::vector<model::ProcessInfo> processes;
 
-    for (const auto& entry : std::filesystem::directory_iterator("/proc")) {
-        if (!entry.is_directory()) {
+    std::error_code proc_error;
+    auto iterator = std::filesystem::directory_iterator(
+        "/proc", std::filesystem::directory_options::skip_permission_denied, proc_error);
+
+    for (; !proc_error && iterator != std::filesystem::end(iterator); iterator.increment(proc_error)) {
+        const auto& entry = *iterator;
+        std::error_code entry_error;
+        if (!entry.is_directory(entry_error) || entry_error) {
             continue;
         }
 
@@ -204,7 +211,10 @@ int Application::run() {
 #else
     ProcfsSampler sampler;
     SamplingWorker worker(sampler, store_);
+    actions::PosixProcessMutator mutator;
+    actions::ProcessActions process_actions(mutator);
     model::SystemSnapshot latest_snapshot;
+    std::string renice_input;
 
     const auto render_once = [&]() {
         worker.tick_once();
@@ -265,8 +275,48 @@ int Application::run() {
         }
 
         if (controller_.mode() == ui::InputMode::ConfirmKill || controller_.mode() == ui::InputMode::Renice) {
+            if (controller_.mode() == ui::InputMode::ConfirmKill) {
+                if (*key == 27 || *key == 'n' || *key == 'N') {
+                    controller_.handle_key(27);
+                } else if (*key == 'y' || *key == 'Y' || *key == '\n' || *key == '\r') {
+                    const auto result = process_actions.kill_process(controller_.selected_pid());
+                    controller_.confirm_kill();
+                    controller_.set_status_text(result.message);
+                }
+                continue;
+            }
+
             if (*key == 27) {
+                renice_input.clear();
                 controller_.handle_key(27);
+            } else if (*key == 127 || *key == '\b') {
+                if (!renice_input.empty()) {
+                    renice_input.pop_back();
+                }
+                controller_.set_status_text(
+                    renice_input.empty() ? "Enter new nice value" : "Enter new nice value: " + renice_input);
+            } else if (*key == '\n' || *key == '\r') {
+                if (renice_input.empty()) {
+                    controller_.submit_renice(0);
+                    controller_.set_status_text("invalid nice value");
+                } else {
+                    try {
+                        const auto nice_value = std::stoi(renice_input);
+                        const auto result = process_actions.renice_process(controller_.selected_pid(), nice_value);
+                        controller_.submit_renice(nice_value);
+                        controller_.set_status_text(result.message);
+                    } catch (const std::exception&) {
+                        controller_.submit_renice(0);
+                        controller_.set_status_text("invalid nice value");
+                    }
+                }
+                renice_input.clear();
+            } else if (std::isdigit(static_cast<unsigned char>(*key)) != 0
+                       || (*key == '-' && renice_input.empty())) {
+                renice_input.push_back(*key);
+                controller_.set_status_text("Enter new nice value: " + renice_input);
+            } else {
+                controller_.set_status_text("Enter new nice value" + (renice_input.empty() ? "" : ": " + renice_input));
             }
             continue;
         }
@@ -290,6 +340,7 @@ int Application::run() {
             case 'R':
                 if (!latest_snapshot.processes.empty()) {
                     controller_.begin_renice(latest_snapshot.processes.front().pid);
+                    renice_input.clear();
                 }
                 break;
             default:

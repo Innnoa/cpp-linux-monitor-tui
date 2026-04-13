@@ -27,7 +27,7 @@ TEST_CASE("dashboard renders the approved panel layout") {
     CHECK(output.find("Disk") != std::string::npos);
     CHECK(output.find("Network") != std::string::npos);
     CHECK(output.find("Processes") != std::string::npos);
-    CHECK(output.find("j/k move") != std::string::npos);
+    CHECK(output.find("q quit") != std::string::npos);
     CHECK(output.find("Command Bar") != std::string::npos);
     CHECK(output.find("Status") != std::string::npos);
     CHECK(output.find("ready") != std::string::npos);

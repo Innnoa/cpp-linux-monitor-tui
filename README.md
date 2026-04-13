@@ -23,13 +23,13 @@ cmake --build build
 
 ## Current controls
 
-- `h/l` or `Tab` / `Shift-Tab`: move focus
-- `j/k`: move process selection
-- `gg` / `G`: jump to start/end
+- `h/l`: move focus
 - `/`: open filter
 - `s`: cycle sort
 - `:`: command bar
-- `K`: show `kill` confirmation for the top listed process
-- `R`: show `renice` prompt for the top listed process
+- `K`: open `kill` confirmation for the top listed process
+- `R`: open `renice` prompt for the top listed process
+- `y/N`: confirm or cancel `kill`
+- type digits then `Enter`: submit `renice`
 - `Esc`: leave filter / command / confirm modes
 - `q`: quit

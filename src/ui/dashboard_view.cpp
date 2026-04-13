@@ -74,7 +74,7 @@ std::string render_dashboard_to_string(
     const auto processes = ftxui::window(ftxui::text("Processes"), ftxui::vbox({
         ftxui::text("PID   S   CPU   MEM   USER    NAME"),
         ftxui::text(process_line),
-        ftxui::text("j/k move · gg/G jump · / filter · s sort · K kill · R renice"),
+        ftxui::text("h/l focus · / filter · : command · K kill · R renice · q quit"),
     }));
 
     const auto bottom = ftxui::hbox({
