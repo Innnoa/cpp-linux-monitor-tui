@@ -36,11 +36,17 @@ std::error_code PosixProcessMutator::set_priority(int pid, int nice_value) {
 }
 
 ActionResult ProcessActions::kill_process(int pid) {
+    if (pid <= 0) {
+        return {.ok = false, .message = "invalid pid"};
+    }
     const auto error = mutator_.send_signal(pid, SIGTERM);
     return {.ok = !error, .message = friendly_message(error)};
 }
 
 ActionResult ProcessActions::renice_process(int pid, int nice_value) {
+    if (pid <= 0) {
+        return {.ok = false, .message = "invalid pid"};
+    }
     if (nice_value < -20 || nice_value > 19) {
         return {.ok = false, .message = "nice value must be between -20 and 19"};
     }

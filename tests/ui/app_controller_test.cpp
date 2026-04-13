@@ -36,3 +36,30 @@ TEST_CASE("controller cycles focus and filter state with vim-style keys") {
     controller.handle_text(":quit");
     CHECK(controller.command_text() == ":quit");
 }
+
+TEST_CASE("controller isolates confirm and renice modes") {
+    monitor::ui::AppController controller(monitor::app::AppConfig::defaults());
+
+    controller.begin_kill(812);
+    CHECK(controller.mode() == monitor::ui::InputMode::ConfirmKill);
+    CHECK(controller.selected_pid() == 812);
+    CHECK(controller.status_text() == "Kill PID 812? [y/N]");
+    controller.handle_key('/');
+    CHECK(controller.mode() == monitor::ui::InputMode::ConfirmKill);
+    CHECK(controller.selected_pid() == 812);
+    controller.handle_key(27);
+    CHECK(controller.mode() == monitor::ui::InputMode::Normal);
+    CHECK(controller.selected_pid() == 0);
+    CHECK(controller.status_text() == "ready");
+
+    controller.begin_renice(441);
+    CHECK(controller.mode() == monitor::ui::InputMode::Renice);
+    CHECK(controller.selected_pid() == 441);
+    CHECK(controller.status_text() == "Enter new nice value");
+    controller.handle_key(':');
+    CHECK(controller.mode() == monitor::ui::InputMode::Renice);
+    controller.submit_renice(5);
+    CHECK(controller.mode() == monitor::ui::InputMode::Normal);
+    CHECK(controller.selected_pid() == 0);
+    CHECK(controller.status_text() == "ready");
+}

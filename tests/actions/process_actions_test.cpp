@@ -26,6 +26,37 @@ TEST_CASE("kill action returns readable permission errors") {
     CHECK(result.message == "permission denied");
 }
 
+TEST_CASE("kill action rejects invalid pid") {
+    FakeMutator mutator;
+    monitor::actions::ProcessActions actions(mutator);
+
+    const auto result = actions.kill_process(0);
+
+    CHECK_FALSE(result.ok);
+    CHECK(result.message == "invalid pid");
+}
+
+TEST_CASE("kill action maps no such process") {
+    FakeMutator mutator;
+    mutator.signal_error = std::make_error_code(std::errc::no_such_process);
+    monitor::actions::ProcessActions actions(mutator);
+
+    const auto result = actions.kill_process(812);
+
+    CHECK_FALSE(result.ok);
+    CHECK(result.message == "process no longer exists");
+}
+
+TEST_CASE("kill action returns ok on success") {
+    FakeMutator mutator;
+    monitor::actions::ProcessActions actions(mutator);
+
+    const auto result = actions.kill_process(812);
+
+    CHECK(result.ok);
+    CHECK(result.message == "ok");
+}
+
 TEST_CASE("renice action rejects values outside the Linux nice range") {
     FakeMutator mutator;
     monitor::actions::ProcessActions actions(mutator);
@@ -34,4 +65,14 @@ TEST_CASE("renice action rejects values outside the Linux nice range") {
 
     CHECK_FALSE(result.ok);
     CHECK(result.message == "nice value must be between -20 and 19");
+}
+
+TEST_CASE("renice action rejects invalid pid") {
+    FakeMutator mutator;
+    monitor::actions::ProcessActions actions(mutator);
+
+    const auto result = actions.renice_process(-1, 0);
+
+    CHECK_FALSE(result.ok);
+    CHECK(result.message == "invalid pid");
 }

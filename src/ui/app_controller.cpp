@@ -26,6 +26,16 @@ void AppController::handle_key(int key) {
         return;
     }
 
+    if ((mode_ == InputMode::ConfirmKill || mode_ == InputMode::Renice) && key == 27) {
+        selected_pid_ = 0;
+        status_text_ = "ready";
+        mode_ = InputMode::Normal;
+        return;
+    }
+    if (mode_ == InputMode::ConfirmKill || mode_ == InputMode::Renice) {
+        return;
+    }
+
     if (key == '/') {
         mode_ = InputMode::Filter;
         return;
@@ -76,8 +86,17 @@ void AppController::begin_renice(int pid) {
     status_text_ = "Enter new nice value";
 }
 
-void AppController::confirm_kill() { mode_ = InputMode::Normal; }
-void AppController::submit_renice(int /*nice_value*/) { mode_ = InputMode::Normal; }
+void AppController::confirm_kill() {
+    selected_pid_ = 0;
+    status_text_ = "ready";
+    mode_ = InputMode::Normal;
+}
+
+void AppController::submit_renice(int /*nice_value*/) {
+    selected_pid_ = 0;
+    status_text_ = "ready";
+    mode_ = InputMode::Normal;
+}
 
 app::FocusZone AppController::focus() const { return focus_; }
 InputMode AppController::mode() const { return mode_; }
