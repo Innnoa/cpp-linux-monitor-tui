@@ -57,6 +57,7 @@ set(MONITOR_CORE_SOURCES
   src/collector/memory_collector.cpp
   src/collector/network_collector.cpp
   src/collector/process_collector.cpp
+  src/actions/process_actions.cpp
   src/ui/app_controller.cpp)
 if(MONITOR_HAS_FTXUI)
   list(APPEND MONITOR_CORE_SOURCES src/ui/dashboard_view.cpp)
@@ -99,6 +100,7 @@ if(BUILD_TESTING)
     tests/store/snapshot_store_test.cpp
     tests/collector/system_collectors_test.cpp
     tests/collector/process_collector_test.cpp
+    tests/actions/process_actions_test.cpp
     tests/ui/app_controller_test.cpp)
   if(MONITOR_HAS_FTXUI)
     list(APPEND MONITOR_TEST_SOURCES tests/ui/dashboard_view_test.cpp)
