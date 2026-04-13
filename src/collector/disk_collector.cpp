@@ -48,10 +48,14 @@ std::vector<model::DiskMetrics> compute_disk_metrics(
         const auto& previous_counter = previous_it->second;
         model::DiskMetrics metric;
         metric.label = mount_label;
-        metric.read_bytes_per_sec =
-            (counter.read_sectors - previous_counter.read_sectors) * 512ULL;
-        metric.write_bytes_per_sec =
-            (counter.write_sectors - previous_counter.write_sectors) * 512ULL;
+        const auto read_delta = (counter.read_sectors > previous_counter.read_sectors)
+                                    ? (counter.read_sectors - previous_counter.read_sectors)
+                                    : 0ULL;
+        const auto write_delta = (counter.write_sectors > previous_counter.write_sectors)
+                                     ? (counter.write_sectors - previous_counter.write_sectors)
+                                     : 0ULL;
+        metric.read_bytes_per_sec = read_delta * 512ULL;
+        metric.write_bytes_per_sec = write_delta * 512ULL;
         metrics.push_back(metric);
     }
     return metrics;

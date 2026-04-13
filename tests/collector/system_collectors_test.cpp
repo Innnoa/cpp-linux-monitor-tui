@@ -141,3 +141,52 @@ TEST_CASE("memory collector clamps underflow scenarios") {
     CHECK(metrics.swap_total_bytes == 50ULL * 1024ULL);
     CHECK(metrics.swap_used_bytes == 0ULL);
 }
+
+TEST_CASE("cpu collector returns zero on total rollback") {
+    constexpr std::string_view first =
+        "cpu  200 0 50 700 0\n"
+        "cpu0 100 0 25 350 0\n";
+    constexpr std::string_view second =
+        "cpu  100 0 25 400 0\n"
+        "cpu0 50 0 12 225 0\n";
+
+    const auto metrics = monitor::collector::compute_cpu_metrics(
+        monitor::collector::parse_cpu_sample(first),
+        monitor::collector::parse_cpu_sample(second));
+
+    CHECK(metrics.total_percent == 0.0);
+    CHECK(metrics.core_percents.front() == 0.0);
+}
+
+TEST_CASE("disk collector clamps sector rollback") {
+    constexpr std::string_view first =
+        "   8       0 sda 1 0 500 0 1 0 900 0 0 0 0 0 0 0 0 0 0\n";
+    constexpr std::string_view second =
+        "   8       0 sda 1 0 300 0 1 0 600 0 0 0 0 0 0 0 0 0 0\n";
+
+    const auto metrics = monitor::collector::compute_disk_metrics(
+        monitor::collector::parse_disk_stats(first),
+        monitor::collector::parse_disk_stats(second),
+        "/");
+
+    REQUIRE(metrics.size() == 1);
+    CHECK(metrics.front().read_bytes_per_sec == 0);
+    CHECK(metrics.front().write_bytes_per_sec == 0);
+}
+
+TEST_CASE("network collector clamps byte rollback") {
+    constexpr std::string_view first =
+        "Inter-|   Receive                                                |  Transmit\n"
+        " eth0: 4000 0 0 0 0 0 0 0 8000 0 0 0 0 0 0 0\n";
+    constexpr std::string_view second =
+        "Inter-|   Receive                                                |  Transmit\n"
+        " eth0: 3000 0 0 0 0 0 0 0 6000 0 0 0 0 0 0 0\n";
+
+    const auto metrics = monitor::collector::compute_network_metrics(
+        monitor::collector::parse_network_stats(first),
+        monitor::collector::parse_network_stats(second));
+
+    REQUIRE(metrics.size() == 1);
+    CHECK(metrics.front().rx_bytes_per_sec == 0);
+    CHECK(metrics.front().tx_bytes_per_sec == 0);
+}

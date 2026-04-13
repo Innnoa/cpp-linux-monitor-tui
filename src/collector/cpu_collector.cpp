@@ -10,11 +10,17 @@ namespace {
 double percent(const CpuTimes& previous, const CpuTimes& current) {
     const auto previous_total = previous.user + previous.nice + previous.system + previous.idle + previous.iowait;
     const auto current_total = current.user + current.nice + current.system + current.idle + current.iowait;
-    const auto total_delta = static_cast<double>(current_total - previous_total);
+    const auto total_delta = static_cast<double>(
+        (current_total > previous_total) ? (current_total - previous_total) : 0ULL);
+    if (total_delta == 0.0) {
+        return 0.0;
+    }
+
     const auto previous_idle = previous.idle + previous.iowait;
     const auto current_idle = current.idle + current.iowait;
-    const auto idle_delta = static_cast<double>(current_idle - previous_idle);
-    return total_delta == 0.0 ? 0.0 : ((total_delta - idle_delta) / total_delta) * 100.0;
+    const auto idle_delta = static_cast<double>(
+        (current_idle > previous_idle) ? (current_idle - previous_idle) : 0ULL);
+    return ((total_delta - idle_delta) / total_delta) * 100.0;
 }
 }  // namespace
 

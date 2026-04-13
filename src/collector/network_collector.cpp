@@ -47,8 +47,14 @@ std::vector<model::NetworkMetrics> compute_network_metrics(
         const auto& previous_counter = previous_it->second;
         model::NetworkMetrics metric;
         metric.interface_name = counter.interface_name;
-        metric.rx_bytes_per_sec = counter.rx_bytes - previous_counter.rx_bytes;
-        metric.tx_bytes_per_sec = counter.tx_bytes - previous_counter.tx_bytes;
+        const auto rx_delta = (counter.rx_bytes > previous_counter.rx_bytes)
+                                  ? (counter.rx_bytes - previous_counter.rx_bytes)
+                                  : 0ULL;
+        const auto tx_delta = (counter.tx_bytes > previous_counter.tx_bytes)
+                                  ? (counter.tx_bytes - previous_counter.tx_bytes)
+                                  : 0ULL;
+        metric.rx_bytes_per_sec = rx_delta;
+        metric.tx_bytes_per_sec = tx_delta;
         metrics.push_back(metric);
     }
     return metrics;
