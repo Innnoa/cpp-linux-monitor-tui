@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstddef>
+#include <functional>
+#include <optional>
 #include <string>
 
 #include "app/app_config.h"
@@ -18,11 +20,14 @@ enum class InputMode {
 
 class AppController {
   public:
+    using CommandActionExecutor =
+        std::function<std::string(std::string_view command, int pid, std::optional<int> value)>;
+
     explicit AppController(app::AppConfig config);
 
     void handle_key(int key);
     void handle_text(std::string text);
-    void execute_command(std::string text);
+    void execute_command(std::string text, const CommandActionExecutor& action_executor = {});
     void begin_kill(int pid);
     void begin_renice(int pid);
     void confirm_kill();

@@ -41,3 +41,5 @@ cmake --build build
 - `:filter <text>`
 - `:clear`
 - `:quit`
+- `:kill <pid>`
+- `:renice <pid> <value>`

@@ -276,7 +276,17 @@ int Application::run() {
                 }
                 controller_.handle_text(text);
             } else if (*key == '\n' || *key == '\r') {
-                controller_.execute_command(command_input(controller_));
+                controller_.execute_command(
+                    command_input(controller_),
+                    [&](std::string_view command, int pid, std::optional<int> value) {
+                        if (command == "kill") {
+                            return process_actions.kill_process(pid).message;
+                        }
+                        if (command == "renice" && value.has_value()) {
+                            return process_actions.renice_process(pid, *value).message;
+                        }
+                        return std::string{"unknown command"};
+                    });
                 if (controller_.should_quit()) {
                     running = false;
                 }

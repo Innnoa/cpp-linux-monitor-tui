@@ -1,3 +1,6 @@
+#include <optional>
+#include <string>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include "app/app_config.h"
@@ -101,6 +104,46 @@ TEST_CASE("controller reports unknown commands with examples") {
     CHECK(controller.status_text() == "unknown command: srot cpu (try: sort cpu, filter postgres, clear, quit)");
 }
 
+TEST_CASE("controller executes action commands through injected executor") {
+    monitor::ui::AppController controller(monitor::app::AppConfig::defaults());
+
+    std::string captured_command;
+    int captured_pid = 0;
+    std::optional<int> captured_value;
+
+    const auto executor = [&](std::string_view command, int pid, std::optional<int> value) {
+        captured_command = std::string{command};
+        captured_pid = pid;
+        captured_value = value;
+        return std::string{"ok"};
+    };
+
+    controller.execute_command("kill 812", executor);
+    CHECK(captured_command == "kill");
+    CHECK(captured_pid == 812);
+    CHECK_FALSE(captured_value.has_value());
+    CHECK(controller.status_text() == "ok");
+
+    controller.execute_command("renice 812 5", executor);
+    CHECK(captured_command == "renice");
+    CHECK(captured_pid == 812);
+    REQUIRE(captured_value.has_value());
+    CHECK(*captured_value == 5);
+    CHECK(controller.status_text() == "ok");
+}
+
+TEST_CASE("controller rejects malformed action commands") {
+    monitor::ui::AppController controller(monitor::app::AppConfig::defaults());
+
+    controller.execute_command("kill abc");
+    CHECK(controller.status_text() == "unknown command: kill abc (try: sort cpu, filter postgres, clear, quit, kill 1234, renice 1234 5)");
+
+    controller.execute_command("renice 123");
+    CHECK(controller.status_text() == "unknown command: renice 123 (try: sort cpu, filter postgres, clear, quit, kill 1234, renice 1234 5)");
+
+    controller.execute_command("renice 123 abc");
+    CHECK(controller.status_text() == "unknown command: renice 123 abc (try: sort cpu, filter postgres, clear, quit, kill 1234, renice 1234 5)");
+}
 TEST_CASE("controller isolates confirm kill mode") {
     monitor::ui::AppController controller(monitor::app::AppConfig::defaults());
 

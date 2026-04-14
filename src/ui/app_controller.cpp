@@ -99,7 +99,7 @@ void AppController::handle_text(std::string text) {
     }
 }
 
-void AppController::execute_command(std::string text) {
+void AppController::execute_command(std::string text, const CommandActionExecutor& action_executor) {
     auto first = text.find_first_not_of(' ');
     if (first == std::string::npos) {
         finish_command("ready");
@@ -157,6 +157,38 @@ void AppController::execute_command(std::string text) {
         return;
     }
 
+    if (command == "kill") {
+        int pid = 0;
+        if (!(input >> pid) || (input >> std::ws, !input.eof())) {
+            finish_command("unknown command: " + text
+                           + " (try: sort cpu, filter postgres, clear, quit, kill 1234, renice 1234 5)");
+            return;
+        }
+        if (action_executor) {
+            finish_command(action_executor("kill", pid, std::nullopt));
+        } else {
+            finish_command("unknown command: " + text
+                           + " (try: sort cpu, filter postgres, clear, quit, kill 1234, renice 1234 5)");
+        }
+        return;
+    }
+
+    if (command == "renice") {
+        int pid = 0;
+        int nice_value = 0;
+        if (!(input >> pid >> nice_value) || (input >> std::ws, !input.eof())) {
+            finish_command("unknown command: " + text
+                           + " (try: sort cpu, filter postgres, clear, quit, kill 1234, renice 1234 5)");
+            return;
+        }
+        if (action_executor) {
+            finish_command(action_executor("renice", pid, nice_value));
+        } else {
+            finish_command("unknown command: " + text
+                           + " (try: sort cpu, filter postgres, clear, quit, kill 1234, renice 1234 5)");
+        }
+        return;
+    }
     finish_command("unknown command: " + text + " (try: sort cpu, filter postgres, clear, quit)");
 }
 
