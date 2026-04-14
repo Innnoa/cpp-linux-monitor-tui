@@ -72,8 +72,9 @@ std::string render_dashboard_to_string(
         process_rows.push_back(ftxui::text("no matching processes"));
     } else {
         const auto selected_index = std::min(controller.selected_process_index(), visible_processes.size() - 1);
-        const auto start_index = (selected_index > 2) ? (selected_index - 2) : 0;
-        const auto end_index = std::min(visible_processes.size(), start_index + 5);
+        const auto start_index = std::min(controller.process_window_start(), visible_processes.size() - 1);
+        const auto end_index =
+            std::min(visible_processes.size(), start_index + std::max<std::size_t>(1, controller.process_window_height()));
         for (std::size_t index = start_index; index < end_index; ++index) {
             const auto& process = visible_processes[index];
             std::ostringstream line;

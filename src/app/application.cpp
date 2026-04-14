@@ -226,6 +226,7 @@ int Application::run() {
     const auto render_once = [&]() {
         worker.tick_once();
         latest_snapshot = store_.latest();
+        controller_.set_process_window_height(5);
         controller_.set_visible_process_count(visible_processes_for_controller(latest_snapshot, controller_).size());
         return ui::render_dashboard_to_string(latest_snapshot, controller_, 120, 40);
     };

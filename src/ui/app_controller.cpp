@@ -4,6 +4,10 @@
 
 namespace monitor::ui {
 
+namespace {
+constexpr std::size_t kScrollContextLines = 1;
+}
+
 AppController::AppController(app::AppConfig config)
     : config_(config), focus_(config.default_focus) {}
 
@@ -59,9 +63,19 @@ void AppController::handle_key(int key) {
         if (selected_process_index_ + 1 < visible_process_count_) {
             ++selected_process_index_;
         }
+        if (visible_process_count_ > process_window_height_ && process_window_height_ > 0
+            && selected_process_index_ + kScrollContextLines + 1 > process_window_start_ + process_window_height_) {
+            process_window_start_ =
+                selected_process_index_ + kScrollContextLines + 1 - process_window_height_;
+        }
     } else if (key == 'k') {
         if (selected_process_index_ > 0) {
             --selected_process_index_;
+        }
+        if (visible_process_count_ > process_window_height_
+            && selected_process_index_ < process_window_start_ + kScrollContextLines) {
+            process_window_start_ =
+                (selected_process_index_ > kScrollContextLines) ? (selected_process_index_ - kScrollContextLines) : 0;
         }
     } else if (key == 's') {
         sort_key_ = sort_key_ == collector::ProcessSortKey::Name
@@ -127,6 +141,20 @@ void AppController::set_visible_process_count(std::size_t count) {
     if (visible_process_count_ == 0 || selected_process_index_ >= visible_process_count_) {
         selected_process_index_ = 0;
     }
+    const auto max_window_start =
+        (visible_process_count_ > process_window_height_) ? (visible_process_count_ - process_window_height_) : 0;
+    if (process_window_start_ > max_window_start) {
+        process_window_start_ = max_window_start;
+    }
+}
+
+void AppController::set_process_window_height(std::size_t height) {
+    process_window_height_ = (height == 0) ? 1 : height;
+    const auto max_window_start =
+        (visible_process_count_ > process_window_height_) ? (visible_process_count_ - process_window_height_) : 0;
+    if (process_window_start_ > max_window_start) {
+        process_window_start_ = max_window_start;
+    }
 }
 
 app::FocusZone AppController::focus() const { return focus_; }
@@ -138,5 +166,7 @@ std::string AppController::filter_query() const { return filter_query_; }
 collector::ProcessSortKey AppController::sort_key() const { return sort_key_; }
 int AppController::selected_pid() const { return selected_pid_; }
 std::size_t AppController::selected_process_index() const { return selected_process_index_; }
+std::size_t AppController::process_window_start() const { return process_window_start_; }
+std::size_t AppController::process_window_height() const { return process_window_height_; }
 
 }  // namespace monitor::ui

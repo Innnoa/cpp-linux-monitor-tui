@@ -40,24 +40,32 @@ TEST_CASE("controller cycles focus and filter state with vim-style keys") {
 TEST_CASE("controller tracks selected process within visible list") {
     monitor::ui::AppController controller(monitor::app::AppConfig::defaults());
 
-    controller.set_visible_process_count(3);
+    controller.set_visible_process_count(6);
+    controller.set_process_window_height(3);
     CHECK(controller.selected_process_index() == 0);
+    CHECK(controller.process_window_start() == 0);
 
     controller.handle_key('j');
     CHECK(controller.selected_process_index() == 1);
+    CHECK(controller.process_window_start() == 0);
     controller.handle_key('j');
     CHECK(controller.selected_process_index() == 2);
+    CHECK(controller.process_window_start() == 1);
     controller.handle_key('j');
-    CHECK(controller.selected_process_index() == 2);
+    CHECK(controller.selected_process_index() == 3);
+    CHECK(controller.process_window_start() == 2);
 
     controller.handle_key('k');
-    CHECK(controller.selected_process_index() == 1);
+    CHECK(controller.selected_process_index() == 2);
+    CHECK(controller.process_window_start() == 1);
 
     controller.set_visible_process_count(1);
     CHECK(controller.selected_process_index() == 0);
+    CHECK(controller.process_window_start() == 0);
 
     controller.set_visible_process_count(0);
     CHECK(controller.selected_process_index() == 0);
+    CHECK(controller.process_window_start() == 0);
 }
 
 TEST_CASE("controller isolates confirm kill mode") {

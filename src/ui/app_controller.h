@@ -28,6 +28,7 @@ class AppController {
     void submit_renice(int nice_value);
     void set_status_text(std::string text);
     void set_visible_process_count(std::size_t count);
+    void set_process_window_height(std::size_t height);
 
     [[nodiscard]] app::FocusZone focus() const;
     [[nodiscard]] InputMode mode() const;
@@ -38,6 +39,8 @@ class AppController {
     [[nodiscard]] collector::ProcessSortKey sort_key() const;
     [[nodiscard]] int selected_pid() const;
     [[nodiscard]] std::size_t selected_process_index() const;
+    [[nodiscard]] std::size_t process_window_start() const;
+    [[nodiscard]] std::size_t process_window_height() const;
 
   private:
     app::AppConfig config_;
@@ -50,6 +53,8 @@ class AppController {
     int selected_pid_{0};
     std::size_t visible_process_count_{0};
     std::size_t selected_process_index_{0};
+    std::size_t process_window_start_{0};
+    std::size_t process_window_height_{5};
 };
 
 }  // namespace monitor::ui
