@@ -275,7 +275,12 @@ int Application::run() {
                     text.pop_back();
                 }
                 controller_.handle_text(text);
-            } else if (*key != '\n' && *key != '\r') {
+            } else if (*key == '\n' || *key == '\r') {
+                controller_.execute_command(command_input(controller_));
+                if (controller_.should_quit()) {
+                    running = false;
+                }
+            } else {
                 auto text = command_input(controller_);
                 text.push_back(*key);
                 controller_.handle_text(text);

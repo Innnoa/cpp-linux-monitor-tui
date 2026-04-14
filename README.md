@@ -34,3 +34,10 @@ cmake --build build
 - type digits then `Enter`: submit `renice`
 - `Esc`: leave filter / command / confirm modes
 - `q`: quit
+
+## Current command-bar commands
+
+- `:sort cpu|memory|pid|name`
+- `:filter <text>`
+- `:clear`
+- `:quit`

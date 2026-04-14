@@ -22,6 +22,7 @@ class AppController {
 
     void handle_key(int key);
     void handle_text(std::string text);
+    void execute_command(std::string text);
     void begin_kill(int pid);
     void begin_renice(int pid);
     void confirm_kill();
@@ -41,8 +42,11 @@ class AppController {
     [[nodiscard]] std::size_t selected_process_index() const;
     [[nodiscard]] std::size_t process_window_start() const;
     [[nodiscard]] std::size_t process_window_height() const;
+    [[nodiscard]] bool should_quit() const;
 
   private:
+    void finish_command(std::string status_text);
+
     app::AppConfig config_;
     app::FocusZone focus_;
     InputMode mode_{InputMode::Normal};
@@ -55,6 +59,7 @@ class AppController {
     std::size_t selected_process_index_{0};
     std::size_t process_window_start_{0};
     std::size_t process_window_height_{5};
+    bool should_quit_{false};
 };
 
 }  // namespace monitor::ui

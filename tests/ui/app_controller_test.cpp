@@ -68,6 +68,39 @@ TEST_CASE("controller tracks selected process within visible list") {
     CHECK(controller.process_window_start() == 0);
 }
 
+TEST_CASE("controller executes internal commands") {
+    monitor::ui::AppController controller(monitor::app::AppConfig::defaults());
+
+    controller.handle_key(':');
+    controller.handle_text("sort name");
+    controller.execute_command("sort name");
+    CHECK(controller.sort_key() == monitor::collector::ProcessSortKey::Name);
+    CHECK(controller.status_text() == "sort: name");
+    CHECK(controller.mode() == monitor::ui::InputMode::Normal);
+    CHECK(controller.command_text().empty());
+
+    controller.execute_command("filter postgres");
+    CHECK(controller.filter_query() == "postgres");
+    CHECK(controller.status_text() == "filter: postgres");
+
+    controller.execute_command("clear");
+    CHECK(controller.filter_query().empty());
+    CHECK(controller.status_text() == "cleared");
+
+    controller.execute_command("quit");
+    CHECK(controller.should_quit());
+    CHECK(controller.status_text() == "quitting");
+}
+
+TEST_CASE("controller reports unknown commands with examples") {
+    monitor::ui::AppController controller(monitor::app::AppConfig::defaults());
+
+    controller.execute_command("srot cpu");
+
+    CHECK_FALSE(controller.should_quit());
+    CHECK(controller.status_text() == "unknown command: srot cpu (try: sort cpu, filter postgres, clear, quit)");
+}
+
 TEST_CASE("controller isolates confirm kill mode") {
     monitor::ui::AppController controller(monitor::app::AppConfig::defaults());
 

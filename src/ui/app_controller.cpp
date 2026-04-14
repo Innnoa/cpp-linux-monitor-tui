@@ -1,5 +1,6 @@
 #include "ui/app_controller.h"
 
+#include <sstream>
 #include <utility>
 
 namespace monitor::ui {
@@ -98,6 +99,67 @@ void AppController::handle_text(std::string text) {
     }
 }
 
+void AppController::execute_command(std::string text) {
+    auto first = text.find_first_not_of(' ');
+    if (first == std::string::npos) {
+        finish_command("ready");
+        return;
+    }
+    text.erase(0, first);
+
+    std::istringstream input(text);
+    std::string command;
+    input >> command;
+
+    if (command == "sort") {
+        std::string field;
+        input >> field;
+        if (field == "cpu") {
+            sort_key_ = collector::ProcessSortKey::Cpu;
+            finish_command("sort: cpu");
+        } else if (field == "memory") {
+            sort_key_ = collector::ProcessSortKey::Memory;
+            finish_command("sort: memory");
+        } else if (field == "pid") {
+            sort_key_ = collector::ProcessSortKey::Pid;
+            finish_command("sort: pid");
+        } else if (field == "name") {
+            sort_key_ = collector::ProcessSortKey::Name;
+            finish_command("sort: name");
+        } else {
+            finish_command("unknown command: " + text + " (try: sort cpu, filter postgres, clear, quit)");
+        }
+        return;
+    }
+
+    if (command == "filter") {
+        std::string rest;
+        std::getline(input, rest);
+        auto start = rest.find_first_not_of(' ');
+        if (start == std::string::npos) {
+            finish_command("unknown command: " + text + " (try: sort cpu, filter postgres, clear, quit)");
+            return;
+        }
+        filter_query_ = rest.substr(start);
+        finish_command("filter: " + filter_query_);
+        return;
+    }
+
+    if (command == "clear") {
+        filter_query_.clear();
+        finish_command("cleared");
+        return;
+    }
+
+    if (command == "quit") {
+        should_quit_ = true;
+        finish_command("quitting");
+        return;
+    }
+
+    finish_command("unknown command: " + text + " (try: sort cpu, filter postgres, clear, quit)");
+}
+
 void AppController::begin_kill(int pid) {
     if (pid <= 0) {
         selected_pid_ = 0;
@@ -168,5 +230,12 @@ int AppController::selected_pid() const { return selected_pid_; }
 std::size_t AppController::selected_process_index() const { return selected_process_index_; }
 std::size_t AppController::process_window_start() const { return process_window_start_; }
 std::size_t AppController::process_window_height() const { return process_window_height_; }
+bool AppController::should_quit() const { return should_quit_; }
+
+void AppController::finish_command(std::string status_text) {
+    command_text_.clear();
+    status_text_ = std::move(status_text);
+    mode_ = InputMode::Normal;
+}
 
 }  // namespace monitor::ui
