@@ -1,5 +1,7 @@
 #include "ui/dashboard_view.h"
 
+#include "collector/process_collector.h"
+
 #include <iomanip>
 #include <sstream>
 
@@ -61,21 +63,30 @@ std::string render_dashboard_to_string(
         {resource_box("Disk", disk_summary), resource_box("Network", network_summary)},
     });
 
-    std::string process_line = "no processes";
-    if (!snapshot.processes.empty()) {
-        const auto& process = snapshot.processes.front();
-        std::ostringstream line;
-        line << process.pid << "   " << process.state << "   " << std::fixed << std::setprecision(0)
-             << process.cpu_percent << "    " << std::setprecision(1) << process.memory_percent << "   "
-             << process.user << "    " << process.name;
-        process_line = line.str();
+    auto visible_processes =
+        collector::filter_processes(collector::sort_processes(snapshot.processes, controller.sort_key()),
+                                    controller.filter_query());
+    std::vector<ftxui::Element> process_rows;
+    process_rows.push_back(ftxui::text("PID   S   CPU   MEM   USER    NAME"));
+    if (visible_processes.empty()) {
+        process_rows.push_back(ftxui::text("no matching processes"));
+    } else {
+        const auto selected_index = std::min(controller.selected_process_index(), visible_processes.size() - 1);
+        const auto start_index = (selected_index > 2) ? (selected_index - 2) : 0;
+        const auto end_index = std::min(visible_processes.size(), start_index + 5);
+        for (std::size_t index = start_index; index < end_index; ++index) {
+            const auto& process = visible_processes[index];
+            std::ostringstream line;
+            line << ((index == selected_index) ? "> " : "  ");
+            line << process.pid << "   " << process.state << "   " << std::fixed << std::setprecision(0)
+                 << process.cpu_percent << "    " << std::setprecision(1) << process.memory_percent << "   "
+                 << process.user << "    " << process.name;
+            process_rows.push_back(ftxui::text(line.str()));
+        }
     }
+    process_rows.push_back(ftxui::text("h/l focus · j/k select · / filter · : command · K kill · R renice · q quit"));
 
-    const auto processes = ftxui::window(ftxui::text("Processes"), ftxui::vbox({
-        ftxui::text("PID   S   CPU   MEM   USER    NAME"),
-        ftxui::text(process_line),
-        ftxui::text("h/l focus · / filter · : command · K kill · R renice · q quit"),
-    }));
+    const auto processes = ftxui::window(ftxui::text("Processes"), ftxui::vbox(process_rows));
 
     auto command_display = controller.command_text();
     if (controller.mode() == InputMode::Filter) {

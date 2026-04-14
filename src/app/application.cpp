@@ -198,6 +198,13 @@ std::string command_input(const ui::AppController& controller) {
     return command;
 }
 
+std::vector<model::ProcessInfo> visible_processes_for_controller(
+    const model::SystemSnapshot& snapshot,
+    const ui::AppController& controller) {
+    return collector::filter_processes(collector::sort_processes(snapshot.processes, controller.sort_key()),
+                                       controller.filter_query());
+}
+
 }  // namespace
 #endif
 
@@ -219,6 +226,7 @@ int Application::run() {
     const auto render_once = [&]() {
         worker.tick_once();
         latest_snapshot = store_.latest();
+        controller_.set_visible_process_count(visible_processes_for_controller(latest_snapshot, controller_).size());
         return ui::render_dashboard_to_string(latest_snapshot, controller_, 120, 40);
     };
 
@@ -333,15 +341,29 @@ int Application::run() {
                 controller_.handle_key(*key);
                 break;
             case 'K':
-                if (!latest_snapshot.processes.empty()) {
-                    controller_.begin_kill(latest_snapshot.processes.front().pid);
+                {
+                    const auto visible_processes = visible_processes_for_controller(latest_snapshot, controller_);
+                    if (!visible_processes.empty()) {
+                        const auto index =
+                            std::min(controller_.selected_process_index(), visible_processes.size() - 1);
+                        controller_.begin_kill(visible_processes[index].pid);
+                    }
                 }
                 break;
             case 'R':
-                if (!latest_snapshot.processes.empty()) {
-                    controller_.begin_renice(latest_snapshot.processes.front().pid);
-                    renice_input.clear();
+                {
+                    const auto visible_processes = visible_processes_for_controller(latest_snapshot, controller_);
+                    if (!visible_processes.empty()) {
+                        const auto index =
+                            std::min(controller_.selected_process_index(), visible_processes.size() - 1);
+                        controller_.begin_renice(visible_processes[index].pid);
+                        renice_input.clear();
+                    }
                 }
+                break;
+            case 'j':
+            case 'k':
+                controller_.handle_key(*key);
                 break;
             default:
                 break;

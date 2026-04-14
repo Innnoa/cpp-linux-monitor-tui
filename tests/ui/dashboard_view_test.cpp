@@ -38,12 +38,32 @@ TEST_CASE("dashboard renders the approved panel layout") {
 
 TEST_CASE("dashboard shows filter text while in filter mode") {
     monitor::model::SystemSnapshot snapshot;
+    snapshot.processes.push_back({812, 'R', 98.0, 2.1, 0, "root", "postgres"});
+    snapshot.processes.push_back({301, 'S', 12.0, 1.0, 0, "user", "nginx"});
     monitor::ui::AppController controller(monitor::app::AppConfig::defaults());
     controller.handle_key('/');
     controller.handle_text("postgres");
+    controller.set_visible_process_count(1);
 
     const auto output = monitor::ui::render_dashboard_to_string(snapshot, controller, 120, 40);
 
     CHECK(output.find("/postgres") != std::string::npos);
     CHECK(output.find("Filter mode") != std::string::npos);
+    CHECK(output.find("postgres") != std::string::npos);
+    CHECK(output.find("nginx") == std::string::npos);
+}
+
+TEST_CASE("dashboard highlights selected filtered process") {
+    monitor::model::SystemSnapshot snapshot;
+    snapshot.processes.push_back({812, 'R', 98.0, 2.1, 0, "root", "postgres"});
+    snapshot.processes.push_back({301, 'S', 12.0, 1.0, 0, "user", "nginx"});
+    snapshot.processes.push_back({411, 'S', 9.0, 0.5, 0, "user", "redis"});
+
+    monitor::ui::AppController controller(monitor::app::AppConfig::defaults());
+    controller.set_visible_process_count(3);
+    controller.handle_key('j');
+    const auto output = monitor::ui::render_dashboard_to_string(snapshot, controller, 120, 40);
+
+    CHECK(output.find("> 301") != std::string::npos);
+    CHECK(output.find("j/k select") != std::string::npos);
 }

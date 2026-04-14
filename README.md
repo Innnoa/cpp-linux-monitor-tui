@@ -24,11 +24,12 @@ cmake --build build
 ## Current controls
 
 - `h/l`: move focus
-- `/`: open filter
+- `j/k`: move process selection
+- `/`: open filter and apply live filtering to the process list
 - `s`: cycle sort
 - `:`: command bar
-- `K`: open `kill` confirmation for the top listed process
-- `R`: open `renice` prompt for the top listed process
+- `K`: open `kill` confirmation for the selected process
+- `R`: open `renice` prompt for the selected process
 - `y/N`: confirm or cancel `kill`
 - type digits then `Enter`: submit `renice`
 - `Esc`: leave filter / command / confirm modes

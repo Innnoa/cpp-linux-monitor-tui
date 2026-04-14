@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <string>
 
 #include "app/app_config.h"
@@ -26,6 +27,7 @@ class AppController {
     void confirm_kill();
     void submit_renice(int nice_value);
     void set_status_text(std::string text);
+    void set_visible_process_count(std::size_t count);
 
     [[nodiscard]] app::FocusZone focus() const;
     [[nodiscard]] InputMode mode() const;
@@ -35,6 +37,7 @@ class AppController {
     [[nodiscard]] std::string filter_query() const;
     [[nodiscard]] collector::ProcessSortKey sort_key() const;
     [[nodiscard]] int selected_pid() const;
+    [[nodiscard]] std::size_t selected_process_index() const;
 
   private:
     app::AppConfig config_;
@@ -45,6 +48,8 @@ class AppController {
     std::string command_text_;
     std::string status_text_{"ready"};
     int selected_pid_{0};
+    std::size_t visible_process_count_{0};
+    std::size_t selected_process_index_{0};
 };
 
 }  // namespace monitor::ui

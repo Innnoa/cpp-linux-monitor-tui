@@ -55,6 +55,14 @@ void AppController::handle_key(int key) {
     } else if (key == 'l') {
         focus_ = focus_ == app::FocusZone::CommandBar ? app::FocusZone::Cpu
                                                       : static_cast<app::FocusZone>(static_cast<int>(focus_) + 1);
+    } else if (key == 'j') {
+        if (selected_process_index_ + 1 < visible_process_count_) {
+            ++selected_process_index_;
+        }
+    } else if (key == 'k') {
+        if (selected_process_index_ > 0) {
+            --selected_process_index_;
+        }
     } else if (key == 's') {
         sort_key_ = sort_key_ == collector::ProcessSortKey::Name
                         ? collector::ProcessSortKey::Cpu
@@ -114,6 +122,13 @@ void AppController::submit_renice(int /*nice_value*/) {
 
 void AppController::set_status_text(std::string text) { status_text_ = std::move(text); }
 
+void AppController::set_visible_process_count(std::size_t count) {
+    visible_process_count_ = count;
+    if (visible_process_count_ == 0 || selected_process_index_ >= visible_process_count_) {
+        selected_process_index_ = 0;
+    }
+}
+
 app::FocusZone AppController::focus() const { return focus_; }
 InputMode AppController::mode() const { return mode_; }
 std::chrono::milliseconds AppController::refresh_interval() const { return config_.refresh_interval; }
@@ -122,5 +137,6 @@ std::string AppController::status_text() const { return status_text_; }
 std::string AppController::filter_query() const { return filter_query_; }
 collector::ProcessSortKey AppController::sort_key() const { return sort_key_; }
 int AppController::selected_pid() const { return selected_pid_; }
+std::size_t AppController::selected_process_index() const { return selected_process_index_; }
 
 }  // namespace monitor::ui
