@@ -67,3 +67,25 @@ TEST_CASE("dashboard highlights selected filtered process") {
     CHECK(output.find("> 301") != std::string::npos);
     CHECK(output.find("j/k select") != std::string::npos);
 }
+
+TEST_CASE("dashboard shows selected process details in the right pane") {
+    monitor::model::SystemSnapshot snapshot;
+    snapshot.processes.push_back({812, 'R', 98.0, 2.1, 5, "root", "postgres"});
+    snapshot.processes.push_back({301, 'S', 12.0, 1.0, 0, "user", "nginx"});
+
+    monitor::ui::AppController controller(monitor::app::AppConfig::defaults());
+    controller.set_visible_process_count(2);
+    controller.handle_key('j');
+
+    const auto output = monitor::ui::render_dashboard_to_string(snapshot, controller, 120, 40);
+
+    CHECK(output.find("Selected Process") != std::string::npos);
+    CHECK(output.find("PID: 301") != std::string::npos);
+    CHECK(output.find("Name: nginx") != std::string::npos);
+    CHECK(output.find("User: user") != std::string::npos);
+    CHECK(output.find("State: S") != std::string::npos);
+    CHECK(output.find("Memory %: 1.0") != std::string::npos);
+    CHECK(output.find("Nice: 0") != std::string::npos);
+    CHECK(output.find("K kill") != std::string::npos);
+    CHECK(output.find("R renice") != std::string::npos);
+}

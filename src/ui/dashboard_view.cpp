@@ -87,7 +87,35 @@ std::string render_dashboard_to_string(
     }
     process_rows.push_back(ftxui::text("h/l focus · j/k select · / filter · : command · K kill · R renice · q quit"));
 
-    const auto processes = ftxui::window(ftxui::text("Processes"), ftxui::vbox(process_rows));
+    const auto process_list = ftxui::window(ftxui::text("Processes"), ftxui::vbox(process_rows));
+
+    ftxui::Element detail_body;
+    if (visible_processes.empty()) {
+        detail_body = ftxui::vbox({
+            ftxui::text("No process selected"),
+        });
+    } else {
+        const auto selected_index = std::min(controller.selected_process_index(), visible_processes.size() - 1);
+        const auto& selected = visible_processes[selected_index];
+        std::ostringstream memory_line;
+        memory_line << std::fixed << std::setprecision(1) << selected.memory_percent;
+        detail_body = ftxui::vbox({
+            ftxui::text("PID: " + std::to_string(selected.pid)),
+            ftxui::text("Name: " + selected.name),
+            ftxui::text("User: " + selected.user),
+            ftxui::text(std::string{"State: "} + selected.state),
+            ftxui::text("Memory %: " + memory_line.str()),
+            ftxui::text("Nice: " + std::to_string(selected.nice_value)),
+            ftxui::separator(),
+            ftxui::text("K kill"),
+            ftxui::text("R renice"),
+        });
+    }
+    const auto detail = ftxui::window(ftxui::text("Selected Process"), detail_body);
+    const auto lower = ftxui::hbox({
+        process_list | ftxui::flex,
+        detail | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, 32),
+    });
 
     auto command_display = controller.command_text();
     if (controller.mode() == InputMode::Filter) {
@@ -99,7 +127,7 @@ std::string render_dashboard_to_string(
         ftxui::window(ftxui::text("Status"), ftxui::text(controller.status_text())),
     });
 
-    auto document = ftxui::vbox({header, ftxui::separator(), resources, ftxui::separator(), processes, bottom});
+    auto document = ftxui::vbox({header, ftxui::separator(), resources, ftxui::separator(), lower, bottom});
     document = document | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, width)
                | ftxui::size(ftxui::HEIGHT, ftxui::EQUAL, height);
 
