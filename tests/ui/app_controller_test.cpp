@@ -16,28 +16,62 @@ TEST_CASE("controller cycles focus and filter state with vim-style keys") {
 
     controller.handle_key('/');
     CHECK(controller.mode() == monitor::ui::InputMode::Filter);
+    CHECK(controller.shared_input_active());
+    CHECK(controller.filter_input_active());
+    CHECK_FALSE(controller.command_input_active());
 
     controller.handle_text("post");
-    CHECK(controller.filter_query() == "post");
+    CHECK(controller.shared_input_text() == "post");
+    CHECK(controller.command_text() == "/post");
 
+    controller.submit_filter();
+    CHECK(controller.filter_query() == "post");
+    CHECK(controller.mode() == monitor::ui::InputMode::Normal);
+    CHECK_FALSE(controller.shared_input_active());
+
+    controller.handle_key('/');
+    CHECK(controller.command_text() == "/post");
     controller.handle_key(27);
-    CHECK(controller.filter_query().empty());
+    CHECK(controller.filter_query() == "post");
     CHECK(controller.mode() == monitor::ui::InputMode::Normal);
 
     controller.handle_key(':');
     CHECK(controller.mode() == monitor::ui::InputMode::Command);
+    CHECK(controller.shared_input_active());
+    CHECK(controller.command_input_active());
     controller.handle_text("sort cpu");
     CHECK(controller.command_text() == ":sort cpu");
+    CHECK(controller.shared_input_text() == "sort cpu");
     controller.handle_key('/');
     CHECK(controller.mode() == monitor::ui::InputMode::Command);
     CHECK(controller.command_text() == ":sort cpu");
     controller.handle_key(27);
     CHECK(controller.mode() == monitor::ui::InputMode::Normal);
     CHECK(controller.command_text().empty());
+    CHECK_FALSE(controller.shared_input_active());
 
     controller.handle_key(':');
     controller.handle_text(":quit");
     CHECK(controller.command_text() == ":quit");
+}
+
+TEST_CASE("controller enters command and filter modes as shared input focus states") {
+    monitor::ui::AppController controller(monitor::app::AppConfig::defaults());
+
+    controller.handle_key(':');
+    CHECK(controller.mode() == monitor::ui::InputMode::Command);
+    CHECK(controller.shared_input_active());
+    CHECK(controller.command_text() == ":");
+
+    controller.handle_key(27);
+    CHECK(controller.mode() == monitor::ui::InputMode::Normal);
+    CHECK_FALSE(controller.shared_input_active());
+
+    controller.handle_key('/');
+    CHECK(controller.mode() == monitor::ui::InputMode::Filter);
+    CHECK(controller.shared_input_active());
+    CHECK(controller.status_text() == "Filter mode");
+    CHECK(controller.command_text() == "/");
 }
 
 TEST_CASE("controller tracks selected process within visible list") {

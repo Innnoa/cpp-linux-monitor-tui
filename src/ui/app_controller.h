@@ -28,6 +28,7 @@ class AppController {
     void handle_key(int key);
     void handle_text(std::string text);
     void execute_command(std::string text, const CommandActionExecutor& action_executor = {});
+    void submit_filter();
     void begin_kill(int pid);
     void begin_renice(int pid);
     void confirm_kill();
@@ -40,6 +41,7 @@ class AppController {
     [[nodiscard]] InputMode mode() const;
     [[nodiscard]] std::chrono::milliseconds refresh_interval() const;
     [[nodiscard]] std::string command_text() const;
+    [[nodiscard]] std::string shared_input_text() const;
     [[nodiscard]] std::string status_text() const;
     [[nodiscard]] std::string filter_query() const;
     [[nodiscard]] collector::ProcessSortKey sort_key() const;
@@ -47,6 +49,9 @@ class AppController {
     [[nodiscard]] std::size_t selected_process_index() const;
     [[nodiscard]] std::size_t process_window_start() const;
     [[nodiscard]] std::size_t process_window_height() const;
+    [[nodiscard]] bool shared_input_active() const;
+    [[nodiscard]] bool command_input_active() const;
+    [[nodiscard]] bool filter_input_active() const;
     [[nodiscard]] bool should_quit() const;
 
   private:

@@ -14,9 +14,9 @@ AppController::AppController(app::AppConfig config)
 
 void AppController::handle_key(int key) {
     if (mode_ == InputMode::Filter && key == 27) {
-        filter_query_.clear();
         status_text_ = "ready";
         mode_ = InputMode::Normal;
+        command_text_.clear();
         return;
     }
     if (mode_ == InputMode::Filter) {
@@ -25,6 +25,7 @@ void AppController::handle_key(int key) {
 
     if (mode_ == InputMode::Command && key == 27) {
         command_text_.clear();
+        status_text_ = "ready";
         mode_ = InputMode::Normal;
         return;
     }
@@ -45,6 +46,7 @@ void AppController::handle_key(int key) {
     if (key == '/') {
         mode_ = InputMode::Filter;
         status_text_ = "Filter mode";
+        command_text_ = "/" + filter_query_;
         return;
     }
 
@@ -87,7 +89,13 @@ void AppController::handle_key(int key) {
 
 void AppController::handle_text(std::string text) {
     if (mode_ == InputMode::Filter) {
-        filter_query_ = std::move(text);
+        if (text.empty()) {
+            command_text_ = "/";
+        } else if (text.front() == '/') {
+            command_text_ = std::move(text);
+        } else {
+            command_text_ = "/" + text;
+        }
     } else if (mode_ == InputMode::Command) {
         if (text.empty()) {
             command_text_ = ":";
@@ -192,6 +200,17 @@ void AppController::execute_command(std::string text, const CommandActionExecuto
     finish_command("unknown command: " + text + " (try: sort cpu, filter postgres, clear, quit)");
 }
 
+void AppController::submit_filter() {
+    if (mode_ != InputMode::Filter) {
+        return;
+    }
+
+    filter_query_ = shared_input_text();
+    command_text_.clear();
+    status_text_ = filter_query_.empty() ? "filter cleared" : "filter: " + filter_query_;
+    mode_ = InputMode::Normal;
+}
+
 void AppController::begin_kill(int pid) {
     if (pid <= 0) {
         selected_pid_ = 0;
@@ -260,6 +279,18 @@ app::FocusZone AppController::focus() const { return focus_; }
 InputMode AppController::mode() const { return mode_; }
 std::chrono::milliseconds AppController::refresh_interval() const { return config_.refresh_interval; }
 std::string AppController::command_text() const { return command_text_; }
+std::string AppController::shared_input_text() const {
+    if (mode_ != InputMode::Filter && mode_ != InputMode::Command) {
+        return {};
+    }
+    if (command_text_.empty()) {
+        return {};
+    }
+    if (command_text_.front() == ':' || command_text_.front() == '/') {
+        return command_text_.substr(1);
+    }
+    return command_text_;
+}
 std::string AppController::status_text() const { return status_text_; }
 std::string AppController::filter_query() const { return filter_query_; }
 collector::ProcessSortKey AppController::sort_key() const { return sort_key_; }
@@ -267,6 +298,11 @@ int AppController::selected_pid() const { return selected_pid_; }
 std::size_t AppController::selected_process_index() const { return selected_process_index_; }
 std::size_t AppController::process_window_start() const { return process_window_start_; }
 std::size_t AppController::process_window_height() const { return process_window_height_; }
+bool AppController::shared_input_active() const {
+    return mode_ == InputMode::Filter || mode_ == InputMode::Command;
+}
+bool AppController::command_input_active() const { return mode_ == InputMode::Command; }
+bool AppController::filter_input_active() const { return mode_ == InputMode::Filter; }
 bool AppController::should_quit() const { return should_quit_; }
 
 void AppController::finish_command(std::string status_text) {
