@@ -28,7 +28,7 @@ TEST_CASE("dashboard renders the approved panel layout") {
     CHECK(output.find("Network") != std::string::npos);
     CHECK(output.find("Processes") != std::string::npos);
     CHECK(output.find("q quit") != std::string::npos);
-    CHECK(output.find("Command Bar") != std::string::npos);
+    CHECK(output.find("Input") != std::string::npos);
     CHECK(output.find("Status") != std::string::npos);
     CHECK(output.find("ready") != std::string::npos);
     CHECK(output.find("refresh 1000ms") != std::string::npos);
@@ -48,9 +48,10 @@ TEST_CASE("dashboard shows filter text while in filter mode") {
     const auto output = monitor::ui::render_dashboard_to_string(snapshot, controller, 120, 40);
 
     CHECK(output.find("/postgres") != std::string::npos);
+    CHECK(output.find("Input") != std::string::npos);
     CHECK(output.find("Filter mode") != std::string::npos);
     CHECK(output.find("postgres") != std::string::npos);
-    CHECK(output.find("nginx") == std::string::npos);
+    CHECK(output.find("nginx") != std::string::npos);
 }
 
 TEST_CASE("dashboard highlights selected filtered process") {

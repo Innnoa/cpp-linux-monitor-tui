@@ -31,11 +31,7 @@ ftxui::Element resource_box(const std::string& title, const std::string& summary
 }
 }  // namespace
 
-std::string render_dashboard_to_string(
-    const model::SystemSnapshot& snapshot,
-    const AppController& controller,
-    int width,
-    int height) {
+ftxui::Element render_dashboard_body_document(const model::SystemSnapshot& snapshot, const AppController& controller) {
     const auto header = ftxui::hbox({
         ftxui::text("host: local"),
         ftxui::separator(),
@@ -117,20 +113,37 @@ std::string render_dashboard_to_string(
         detail | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, 32),
     });
 
-    auto command_display = controller.command_text();
-    if (controller.mode() == InputMode::Filter) {
-        command_display = "/" + controller.filter_query();
+    return ftxui::vbox({header, ftxui::separator(), resources, ftxui::separator(), lower});
+}
+
+ftxui::Element render_dashboard_bottom_bar_document(const AppController& controller) {
+    if (controller.shared_input_active()) {
+        return ftxui::hbox({
+            ftxui::window(ftxui::text("Input"), ftxui::text(controller.command_text())) | ftxui::flex,
+            ftxui::window(ftxui::text("Status"), ftxui::text(controller.status_text()))
+                | ftxui::size(ftxui::WIDTH, ftxui::GREATER_THAN, 28),
+        });
     }
+    return ftxui::window(ftxui::text("Status"), ftxui::text(controller.status_text()));
+}
 
-    const auto bottom = ftxui::hbox({
-        ftxui::window(ftxui::text("Command Bar"), ftxui::text(command_display)),
-        ftxui::window(ftxui::text("Status"), ftxui::text(controller.status_text())),
-    });
+ftxui::Element render_dashboard_document(
+    const model::SystemSnapshot& snapshot,
+    const AppController& controller,
+    int width,
+    int height) {
+    auto document =
+        ftxui::vbox({render_dashboard_body_document(snapshot, controller), render_dashboard_bottom_bar_document(controller)});
+    return document | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, width)
+           | ftxui::size(ftxui::HEIGHT, ftxui::EQUAL, height);
+}
 
-    auto document = ftxui::vbox({header, ftxui::separator(), resources, ftxui::separator(), lower, bottom});
-    document = document | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, width)
-               | ftxui::size(ftxui::HEIGHT, ftxui::EQUAL, height);
-
+std::string render_dashboard_to_string(
+    const model::SystemSnapshot& snapshot,
+    const AppController& controller,
+    int width,
+    int height) {
+    auto document = render_dashboard_document(snapshot, controller, width, height);
     auto screen = ftxui::Screen(width, height);
     ftxui::Render(screen, document);
     return screen.ToString();

@@ -27,3 +27,15 @@ TEST_CASE("sampling worker publishes snapshots into the store") {
     CHECK(latest.cpu.total_percent == 37.0);
     CHECK(latest.memory.used_bytes == 31ULL * 1024ULL * 1024ULL);
 }
+
+TEST_CASE("application can render a snapshot without using the raw loop path") {
+    FakeSampler sampler;
+    monitor::store::SnapshotStore store(4);
+    monitor::app::SamplingWorker worker(sampler, store);
+
+    worker.tick_once();
+
+    const auto latest = store.latest();
+    CHECK(latest.cpu.total_percent == 37.0);
+    CHECK(latest.memory.used_bytes == 31ULL * 1024ULL * 1024ULL);
+}

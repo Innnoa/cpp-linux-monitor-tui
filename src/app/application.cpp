@@ -1,18 +1,19 @@
 #include "app/application.h"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <mutex>
 #include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <sys/select.h>
+#include <thread>
 #include <sys/statvfs.h>
-#include <termios.h>
 #include <unistd.h>
 #include <vector>
 
@@ -24,6 +25,12 @@
 #include "collector/network_collector.h"
 #include "collector/process_collector.h"
 #if MONITOR_HAS_FTXUI
+#include <ftxui/component/component.hpp>
+#include <ftxui/component/component_options.hpp>
+#include <ftxui/component/event.hpp>
+#include <ftxui/component/screen_interactive.hpp>
+#include <ftxui/screen/terminal.hpp>
+
 #include "ui/dashboard_view.h"
 #endif
 
@@ -136,66 +143,8 @@ class ProcfsSampler final : public Sampler {
     std::optional<std::vector<collector::NetworkCounters>> previous_networks_;
 };
 
-class ScopedRawMode {
-  public:
-    ScopedRawMode() {
-        if (!::isatty(STDIN_FILENO)) {
-            return;
-        }
-        if (::tcgetattr(STDIN_FILENO, &original_) != 0) {
-            return;
-        }
-
-        auto raw = original_;
-        raw.c_lflag &= static_cast<unsigned long>(~(ICANON | ECHO));
-        raw.c_cc[VMIN] = 0;
-        raw.c_cc[VTIME] = 0;
-        if (::tcsetattr(STDIN_FILENO, TCSANOW, &raw) == 0) {
-            enabled_ = true;
-        }
-    }
-
-    ~ScopedRawMode() {
-        if (enabled_) {
-            ::tcsetattr(STDIN_FILENO, TCSANOW, &original_);
-        }
-    }
-
-    [[nodiscard]] bool enabled() const { return enabled_; }
-
-  private:
-    bool enabled_{false};
-    ::termios original_{};
-};
-
-std::optional<char> read_char_with_timeout(std::chrono::milliseconds timeout) {
-    ::fd_set read_fds;
-    FD_ZERO(&read_fds);
-    FD_SET(STDIN_FILENO, &read_fds);
-
-    ::timeval tv{};
-    tv.tv_sec = static_cast<long>(timeout.count() / 1000);
-    tv.tv_usec = static_cast<long>((timeout.count() % 1000) * 1000);
-
-    const auto ready = ::select(STDIN_FILENO + 1, &read_fds, nullptr, nullptr, &tv);
-    if (ready <= 0 || !FD_ISSET(STDIN_FILENO, &read_fds)) {
-        return std::nullopt;
-    }
-
-    char ch = '\0';
-    const auto count = ::read(STDIN_FILENO, &ch, 1);
-    if (count != 1) {
-        return std::nullopt;
-    }
-    return ch;
-}
-
 std::string command_input(const ui::AppController& controller) {
-    auto command = controller.command_text();
-    if (!command.empty() && command.front() == ':') {
-        command.erase(0, 1);
-    }
-    return command;
+    return controller.shared_input_text();
 }
 
 std::vector<model::ProcessInfo> visible_processes_for_controller(
@@ -203,6 +152,58 @@ std::vector<model::ProcessInfo> visible_processes_for_controller(
     const ui::AppController& controller) {
     return collector::filter_processes(collector::sort_processes(snapshot.processes, controller.sort_key()),
                                        controller.filter_query());
+}
+
+void refresh_snapshot(
+    SamplingWorker& worker,
+    store::SnapshotStore& store,
+    ui::AppController& controller,
+    model::SystemSnapshot& latest_snapshot,
+    std::optional<std::chrono::steady_clock::time_point>& transient_status_deadline) {
+    if (transient_status_deadline && std::chrono::steady_clock::now() >= *transient_status_deadline) {
+        controller.set_status_text("ready");
+        transient_status_deadline.reset();
+    }
+    worker.tick_once();
+    latest_snapshot = store.latest();
+    controller.set_visible_process_count(visible_processes_for_controller(latest_snapshot, controller).size());
+}
+
+bool handle_process_action(
+    ui::AppController& controller,
+    const std::vector<model::ProcessInfo>& visible_processes,
+    char key) {
+    if (visible_processes.empty()) {
+        return false;
+    }
+
+    const auto index = std::min(controller.selected_process_index(), visible_processes.size() - 1);
+    const auto pid = visible_processes[index].pid;
+    if (key == 'K') {
+        controller.begin_kill(pid);
+        return true;
+    }
+    if (key == 'R') {
+        controller.begin_renice(pid);
+        return true;
+    }
+    return false;
+}
+
+ftxui::Element input_bar_document(
+    const ui::AppController& controller,
+    const std::string& status_text,
+    ftxui::Component input_component) {
+    if (!controller.shared_input_active()) {
+        return ui::render_dashboard_bottom_bar_document(controller);
+    }
+    const auto prefix = controller.command_input_active() ? ":" : "/";
+    return ftxui::hbox({
+        ftxui::window(ftxui::text("Input"), ftxui::hbox({ftxui::text(prefix), input_component->Render()}))
+            | ftxui::flex,
+        ftxui::window(ftxui::text("Status"), ftxui::text(status_text))
+            | ftxui::size(ftxui::WIDTH, ftxui::GREATER_THAN, 28),
+    });
 }
 
 }  // namespace
@@ -222,17 +223,14 @@ int Application::run() {
     actions::ProcessActions process_actions(mutator);
     model::SystemSnapshot latest_snapshot;
     std::string renice_input;
+    std::string shared_input_buffer;
+    int shared_input_cursor = 0;
     std::optional<std::chrono::steady_clock::time_point> transient_status_deadline;
+    std::mutex state_mutex;
 
     const auto render_once = [&]() {
-        if (transient_status_deadline && std::chrono::steady_clock::now() >= *transient_status_deadline) {
-            controller_.set_status_text("ready");
-            transient_status_deadline.reset();
-        }
-        worker.tick_once();
-        latest_snapshot = store_.latest();
         controller_.set_process_window_height(5);
-        controller_.set_visible_process_count(visible_processes_for_controller(latest_snapshot, controller_).size());
+        refresh_snapshot(worker, store_, controller_, latest_snapshot, transient_status_deadline);
         return ui::render_dashboard_to_string(latest_snapshot, controller_, 120, 40);
     };
 
@@ -241,105 +239,124 @@ int Application::run() {
         return 0;
     }
 
-    ScopedRawMode raw_mode;
-    std::cout << "\x1b[?25l";
+    refresh_snapshot(worker, store_, controller_, latest_snapshot, transient_status_deadline);
 
-    bool running = true;
-    while (running) {
-        const auto frame = render_once();
-        std::cout << "\x1b[2J\x1b[H" << frame << "\n[q quit]" << std::flush;
+    auto screen = ftxui::ScreenInteractive::Fullscreen();
+    screen.ForceHandleCtrlC(true);
 
-        const auto key = read_char_with_timeout(config_.refresh_interval);
-        if (!key) {
-            continue;
-        }
-
-        if (controller_.mode() == ui::InputMode::Filter) {
-            if (*key == 27) {
-                controller_.handle_key(27);
-            } else if (*key == 127 || *key == '\b') {
-                auto text = controller_.filter_query();
-                if (!text.empty()) {
-                    text.pop_back();
-                }
-                controller_.handle_text(text);
-            } else if (*key != '\n' && *key != '\r') {
-                auto text = controller_.filter_query();
-                text.push_back(*key);
-                controller_.handle_text(text);
-            }
-            continue;
-        }
-
-        if (controller_.mode() == ui::InputMode::Command) {
-            if (*key == 27) {
-                controller_.handle_key(27);
-            } else if (*key == 127 || *key == '\b') {
-                auto text = command_input(controller_);
-                if (!text.empty()) {
-                    text.pop_back();
-                }
-                controller_.handle_text(text);
-            } else if (*key == '\n' || *key == '\r') {
-                controller_.execute_command(
-                    command_input(controller_),
-                    [&](std::string_view command, int pid, std::optional<int> value) {
-                        if (command == "kill") {
-                            return process_actions.kill_process(pid).message;
-                        }
-                        if (command == "renice" && value.has_value()) {
-                            return process_actions.renice_process(pid, *value).message;
-                        }
-                        return std::string{"unknown command"};
-                    });
-                if (controller_.should_quit()) {
-                    running = false;
-                }
-            } else {
-                auto text = command_input(controller_);
-                text.push_back(*key);
-                controller_.handle_text(text);
-            }
-            continue;
-        }
-
-        if (controller_.mode() == ui::InputMode::ConfirmKill || controller_.mode() == ui::InputMode::Renice) {
-            if (controller_.mode() == ui::InputMode::ConfirmKill) {
-                if (*key == 27 || *key == 'n' || *key == 'N') {
-                    controller_.handle_key(27);
-                } else if (*key == 'y' || *key == 'Y' || *key == '\n' || *key == '\r') {
-                    const auto pid = controller_.selected_pid();
-                    const auto result = process_actions.kill_process(controller_.selected_pid());
-                    controller_.confirm_kill();
-                    if (result.ok) {
-                        controller_.set_status_text("killed " + std::to_string(pid) + " successfully");
-                        transient_status_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-                    } else {
-                        controller_.set_status_text(result.message);
-                        transient_status_deadline.reset();
+    ftxui::InputOption input_option;
+    input_option.multiline = false;
+    input_option.content = &shared_input_buffer;
+    input_option.cursor_position = &shared_input_cursor;
+    input_option.on_change = [&] {
+        std::scoped_lock lock(state_mutex);
+        controller_.handle_text(shared_input_buffer);
+    };
+    input_option.on_enter = [&] {
+        std::scoped_lock lock(state_mutex);
+        if (controller_.command_input_active()) {
+            controller_.execute_command(
+                command_input(controller_),
+                [&](std::string_view command, int pid, std::optional<int> value) {
+                    if (command == "kill") {
+                        return process_actions.kill_process(pid).message;
                     }
-                }
-                continue;
+                    if (command == "renice" && value.has_value()) {
+                        return process_actions.renice_process(pid, *value).message;
+                    }
+                    return std::string{"unknown command"};
+                });
+            shared_input_buffer.clear();
+            shared_input_cursor = 0;
+            if (controller_.should_quit()) {
+                screen.ExitLoopClosure()();
             }
+            return;
+        }
+        if (controller_.filter_input_active()) {
+            controller_.submit_filter();
+            shared_input_buffer.clear();
+            shared_input_cursor = 0;
+        }
+    };
+    auto input_component = ftxui::Input(input_option);
 
-            if (*key == 27) {
+    auto dashboard = ftxui::Renderer([&] {
+        std::scoped_lock lock(state_mutex);
+        const auto terminal_size = ftxui::Terminal::Size();
+        controller_.set_process_window_height(std::max(1, terminal_size.dimy - 16));
+        return ftxui::vbox({
+            ui::render_dashboard_body_document(latest_snapshot, controller_)
+                | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, terminal_size.dimx)
+                | ftxui::size(ftxui::HEIGHT, ftxui::EQUAL, terminal_size.dimy - 3),
+            input_bar_document(controller_, controller_.status_text(), input_component),
+        });
+    });
+
+    dashboard |= ftxui::CatchEvent([&](ftxui::Event event) {
+        std::scoped_lock lock(state_mutex);
+
+        if (event == ftxui::Event::Custom) {
+            return true;
+        }
+
+        if (controller_.shared_input_active()) {
+            if (event == ftxui::Event::Escape) {
+                controller_.handle_key(27);
+                shared_input_buffer.clear();
+                shared_input_cursor = 0;
+                return true;
+            }
+            return input_component->OnEvent(event);
+        }
+
+        if (controller_.mode() == ui::InputMode::ConfirmKill) {
+            if (event == ftxui::Event::Escape || event == ftxui::Event::Character('n')
+                || event == ftxui::Event::Character('N')) {
+                controller_.handle_key(27);
+                return true;
+            }
+            if (event == ftxui::Event::Character('y') || event == ftxui::Event::Character('Y')
+                || event == ftxui::Event::Return) {
+                const auto pid = controller_.selected_pid();
+                const auto result = process_actions.kill_process(pid);
+                controller_.confirm_kill();
+                if (result.ok) {
+                    controller_.set_status_text("killed " + std::to_string(pid) + " successfully");
+                    transient_status_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+                } else {
+                    controller_.set_status_text(result.message);
+                    transient_status_deadline.reset();
+                }
+                return true;
+            }
+            return true;
+        }
+
+        if (controller_.mode() == ui::InputMode::Renice) {
+            if (event == ftxui::Event::Escape) {
                 renice_input.clear();
                 controller_.handle_key(27);
-            } else if (*key == 127 || *key == '\b') {
+                return true;
+            }
+            if (event == ftxui::Event::Backspace) {
                 if (!renice_input.empty()) {
                     renice_input.pop_back();
                 }
                 controller_.set_status_text(
                     renice_input.empty() ? "Enter new nice value" : "Enter new nice value: " + renice_input);
-            } else if (*key == '\n' || *key == '\r') {
+                return true;
+            }
+            if (event == ftxui::Event::Return) {
                 if (renice_input.empty()) {
                     controller_.submit_renice(0);
                     controller_.set_status_text("invalid nice value");
+                    transient_status_deadline.reset();
                 } else {
                     try {
                         const auto pid = controller_.selected_pid();
                         const auto nice_value = std::stoi(renice_input);
-                        const auto result = process_actions.renice_process(controller_.selected_pid(), nice_value);
+                        const auto result = process_actions.renice_process(pid, nice_value);
                         controller_.submit_renice(nice_value);
                         if (result.ok) {
                             controller_.set_status_text(
@@ -356,58 +373,66 @@ int Application::run() {
                     }
                 }
                 renice_input.clear();
-            } else if (std::isdigit(static_cast<unsigned char>(*key)) != 0
-                       || (*key == '-' && renice_input.empty())) {
-                renice_input.push_back(*key);
-                controller_.set_status_text("Enter new nice value: " + renice_input);
-            } else {
-                controller_.set_status_text("Enter new nice value" + (renice_input.empty() ? "" : ": " + renice_input));
+                return true;
             }
-            continue;
+            if (event.is_character()) {
+                const auto text = event.character();
+                if (text.size() == 1) {
+                    const auto ch = text.front();
+                    if (std::isdigit(static_cast<unsigned char>(ch)) != 0 || (ch == '-' && renice_input.empty())) {
+                        renice_input.push_back(ch);
+                        controller_.set_status_text("Enter new nice value: " + renice_input);
+                    }
+                }
+                return true;
+            }
+            return true;
         }
 
-        switch (*key) {
-            case 'q':
-                running = false;
-                break;
-            case '/':
-            case ':':
-            case 'h':
-            case 'l':
-            case 's':
-                controller_.handle_key(*key);
-                break;
-            case 'K':
-                {
-                    const auto visible_processes = visible_processes_for_controller(latest_snapshot, controller_);
-                    if (!visible_processes.empty()) {
-                        const auto index =
-                            std::min(controller_.selected_process_index(), visible_processes.size() - 1);
-                        controller_.begin_kill(visible_processes[index].pid);
-                    }
-                }
-                break;
-            case 'R':
-                {
-                    const auto visible_processes = visible_processes_for_controller(latest_snapshot, controller_);
-                    if (!visible_processes.empty()) {
-                        const auto index =
-                            std::min(controller_.selected_process_index(), visible_processes.size() - 1);
-                        controller_.begin_renice(visible_processes[index].pid);
-                        renice_input.clear();
-                    }
-                }
-                break;
-            case 'j':
-            case 'k':
-                controller_.handle_key(*key);
-                break;
-            default:
-                break;
+        if (event == ftxui::Event::Character('q')) {
+            screen.ExitLoopClosure()();
+            return true;
         }
+
+        if (event == ftxui::Event::Character(':') || event == ftxui::Event::Character('/')) {
+            controller_.handle_key(event.character().front());
+            shared_input_buffer = controller_.shared_input_text();
+            shared_input_cursor = static_cast<int>(shared_input_buffer.size());
+            return true;
+        }
+
+        if (event == ftxui::Event::Character('h') || event == ftxui::Event::Character('l')
+            || event == ftxui::Event::Character('s') || event == ftxui::Event::Character('j')
+            || event == ftxui::Event::Character('k')) {
+            controller_.handle_key(event.character().front());
+            return true;
+        }
+
+        if (event == ftxui::Event::Character('K') || event == ftxui::Event::Character('R')) {
+            return handle_process_action(
+                controller_, visible_processes_for_controller(latest_snapshot, controller_), event.character().front());
+        }
+
+        return false;
+    });
+
+    std::atomic<bool> running{true};
+    std::thread sampler_thread([&] {
+        while (running.load()) {
+            {
+                std::scoped_lock lock(state_mutex);
+                refresh_snapshot(worker, store_, controller_, latest_snapshot, transient_status_deadline);
+            }
+            screen.PostEvent(ftxui::Event::Custom);
+            std::this_thread::sleep_for(config_.refresh_interval);
+        }
+    });
+
+    screen.Loop(dashboard);
+    running = false;
+    if (sampler_thread.joinable()) {
+        sampler_thread.join();
     }
-
-    std::cout << "\x1b[2J\x1b[H\x1b[?25h";
     return 0;
 #endif
 }
