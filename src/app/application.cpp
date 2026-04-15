@@ -222,8 +222,13 @@ int Application::run() {
     actions::ProcessActions process_actions(mutator);
     model::SystemSnapshot latest_snapshot;
     std::string renice_input;
+    std::optional<std::chrono::steady_clock::time_point> transient_status_deadline;
 
     const auto render_once = [&]() {
+        if (transient_status_deadline && std::chrono::steady_clock::now() >= *transient_status_deadline) {
+            controller_.set_status_text("ready");
+            transient_status_deadline.reset();
+        }
         worker.tick_once();
         latest_snapshot = store_.latest();
         controller_.set_process_window_height(5);
@@ -303,9 +308,16 @@ int Application::run() {
                 if (*key == 27 || *key == 'n' || *key == 'N') {
                     controller_.handle_key(27);
                 } else if (*key == 'y' || *key == 'Y' || *key == '\n' || *key == '\r') {
+                    const auto pid = controller_.selected_pid();
                     const auto result = process_actions.kill_process(controller_.selected_pid());
                     controller_.confirm_kill();
-                    controller_.set_status_text(result.message);
+                    if (result.ok) {
+                        controller_.set_status_text("killed " + std::to_string(pid) + " successfully");
+                        transient_status_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+                    } else {
+                        controller_.set_status_text(result.message);
+                        transient_status_deadline.reset();
+                    }
                 }
                 continue;
             }
@@ -325,13 +337,22 @@ int Application::run() {
                     controller_.set_status_text("invalid nice value");
                 } else {
                     try {
+                        const auto pid = controller_.selected_pid();
                         const auto nice_value = std::stoi(renice_input);
                         const auto result = process_actions.renice_process(controller_.selected_pid(), nice_value);
                         controller_.submit_renice(nice_value);
-                        controller_.set_status_text(result.message);
+                        if (result.ok) {
+                            controller_.set_status_text(
+                                "reniced " + std::to_string(pid) + " to " + std::to_string(nice_value));
+                            transient_status_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+                        } else {
+                            controller_.set_status_text(result.message);
+                            transient_status_deadline.reset();
+                        }
                     } catch (const std::exception&) {
                         controller_.submit_renice(0);
                         controller_.set_status_text("invalid nice value");
+                        transient_status_deadline.reset();
                     }
                 }
                 renice_input.clear();
