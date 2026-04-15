@@ -89,3 +89,15 @@ TEST_CASE("dashboard shows selected process details in the right pane") {
     CHECK(output.find("K kill") != std::string::npos);
     CHECK(output.find("R renice") != std::string::npos);
 }
+
+TEST_CASE("dashboard shows empty detail pane when no process is selected") {
+    monitor::model::SystemSnapshot snapshot;
+    monitor::ui::AppController controller(monitor::app::AppConfig::defaults());
+    controller.set_visible_process_count(0);
+
+    const auto output = monitor::ui::render_dashboard_to_string(snapshot, controller, 120, 40);
+
+    CHECK(output.find("no matching processes") != std::string::npos);
+    CHECK(output.find("Selected Process") != std::string::npos);
+    CHECK(output.find("No process selected") != std::string::npos);
+}

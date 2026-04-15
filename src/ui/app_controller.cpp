@@ -232,8 +232,13 @@ void AppController::set_status_text(std::string text) { status_text_ = std::move
 
 void AppController::set_visible_process_count(std::size_t count) {
     visible_process_count_ = count;
-    if (visible_process_count_ == 0 || selected_process_index_ >= visible_process_count_) {
+    if (visible_process_count_ == 0) {
         selected_process_index_ = 0;
+        process_window_start_ = 0;
+        return;
+    }
+    if (selected_process_index_ >= visible_process_count_) {
+        selected_process_index_ = visible_process_count_ - 1;
     }
     const auto max_window_start =
         (visible_process_count_ > process_window_height_) ? (visible_process_count_ - process_window_height_) : 0;

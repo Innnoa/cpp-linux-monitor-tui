@@ -71,6 +71,24 @@ TEST_CASE("controller tracks selected process within visible list") {
     CHECK(controller.process_window_start() == 0);
 }
 
+TEST_CASE("controller clamps to nearest valid row when visible list shrinks") {
+    monitor::ui::AppController controller(monitor::app::AppConfig::defaults());
+
+    controller.set_visible_process_count(5);
+    controller.set_process_window_height(3);
+    controller.handle_key('j');
+    controller.handle_key('j');
+    controller.handle_key('j');
+    controller.handle_key('j');
+
+    CHECK(controller.selected_process_index() == 4);
+
+    controller.set_visible_process_count(3);
+
+    CHECK(controller.selected_process_index() == 2);
+    CHECK(controller.process_window_start() == 0);
+}
+
 TEST_CASE("controller executes internal commands") {
     monitor::ui::AppController controller(monitor::app::AppConfig::defaults());
 
