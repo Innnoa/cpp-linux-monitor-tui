@@ -32,11 +32,41 @@
 #include <ftxui/screen/terminal.hpp>
 
 #include "ui/dashboard_view.h"
+#include "ui/theme.h"
 #endif
 
 namespace monitor::app {
 
 #if MONITOR_HAS_FTXUI
+std::size_t visible_process_rows_for_terminal_height(int terminal_height) {
+    constexpr int kBottomBarHeight = 3;
+    constexpr int kHeaderHeight = 1;
+    constexpr int kSeparatorCount = 2;
+    constexpr int kResourceGridHeight = 10;
+    constexpr int kProcessWindowChromeRows = 4;
+    constexpr int kReservedRows =
+        kBottomBarHeight + kHeaderHeight + kSeparatorCount + kResourceGridHeight + kProcessWindowChromeRows;
+
+    return static_cast<std::size_t>(std::max(1, terminal_height - kReservedRows));
+}
+
+bool handle_shared_input_event(
+    ui::AppController& controller,
+    std::string& shared_input_buffer,
+    int& shared_input_cursor,
+    const ftxui::Event& event,
+    std::mutex& state_mutex,
+    const ftxui::Component& input_component) {
+    if (event == ftxui::Event::Escape) {
+        std::scoped_lock lock(state_mutex);
+        controller.handle_key(27);
+        shared_input_buffer.clear();
+        shared_input_cursor = 0;
+        return true;
+    }
+    return input_component->OnEvent(event);
+}
+
 namespace {
 
 std::string read_file(std::string_view path) {
@@ -194,16 +224,23 @@ ftxui::Element input_bar_document(
     const ui::AppController& controller,
     const std::string& status_text,
     ftxui::Component input_component) {
+    const auto& theme = ui::catppuccin_mocha();
     if (!controller.shared_input_active()) {
         return ui::render_dashboard_bottom_bar_document(controller);
     }
     const auto prefix = controller.command_input_active() ? ":" : "/";
     return ftxui::hbox({
-        ftxui::window(ftxui::text("Input"), ftxui::hbox({ftxui::text(prefix), input_component->Render()}))
+        ui::themed_window(
+            "Input",
+            ftxui::hbox({
+                ftxui::text(prefix) | ftxui::color(theme.sapphire) | ftxui::bold,
+                input_component->Render() | ftxui::color(theme.text),
+            }),
+            controller.focus() == app::FocusZone::CommandBar)
             | ftxui::flex,
-        ftxui::window(ftxui::text("Status"), ftxui::text(status_text))
+        ui::themed_window("Status", ftxui::text(status_text) | ftxui::color(ui::status_color(status_text)), false)
             | ftxui::size(ftxui::WIDTH, ftxui::GREATER_THAN, 28),
-    });
+    }) | ftxui::bgcolor(theme.base);
 }
 
 }  // namespace
@@ -229,7 +266,7 @@ int Application::run() {
     std::mutex state_mutex;
 
     const auto render_once = [&]() {
-        controller_.set_process_window_height(5);
+        controller_.set_process_window_height(visible_process_rows_for_terminal_height(40));
         refresh_snapshot(worker, store_, controller_, latest_snapshot, transient_status_deadline);
         return ui::render_dashboard_to_string(latest_snapshot, controller_, 120, 40);
     };
@@ -284,7 +321,7 @@ int Application::run() {
     auto dashboard = ftxui::Renderer([&] {
         std::scoped_lock lock(state_mutex);
         const auto terminal_size = ftxui::Terminal::Size();
-        controller_.set_process_window_height(std::max(1, terminal_size.dimy - 16));
+        controller_.set_process_window_height(visible_process_rows_for_terminal_height(terminal_size.dimy));
         return ftxui::vbox({
             ui::render_dashboard_body_document(latest_snapshot, controller_)
                 | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, terminal_size.dimx)
@@ -294,123 +331,125 @@ int Application::run() {
     });
 
     dashboard |= ftxui::CatchEvent([&](ftxui::Event event) {
-        std::scoped_lock lock(state_mutex);
+        bool shared_input_active = false;
+        {
+            std::scoped_lock lock(state_mutex);
 
-        if (event == ftxui::Event::Custom) {
-            return true;
-        }
-
-        if (controller_.shared_input_active()) {
-            if (event == ftxui::Event::Escape) {
-                controller_.handle_key(27);
-                shared_input_buffer.clear();
-                shared_input_cursor = 0;
+            if (event == ftxui::Event::Custom) {
                 return true;
             }
-            return input_component->OnEvent(event);
-        }
 
-        if (controller_.mode() == ui::InputMode::ConfirmKill) {
-            if (event == ftxui::Event::Escape || event == ftxui::Event::Character('n')
-                || event == ftxui::Event::Character('N')) {
-                controller_.handle_key(27);
-                return true;
-            }
-            if (event == ftxui::Event::Character('y') || event == ftxui::Event::Character('Y')
-                || event == ftxui::Event::Return) {
-                const auto pid = controller_.selected_pid();
-                const auto result = process_actions.kill_process(pid);
-                controller_.confirm_kill();
-                if (result.ok) {
-                    controller_.set_status_text("killed " + std::to_string(pid) + " successfully");
-                    transient_status_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-                } else {
-                    controller_.set_status_text(result.message);
-                    transient_status_deadline.reset();
+            shared_input_active = controller_.shared_input_active();
+
+            if (!shared_input_active && controller_.mode() == ui::InputMode::ConfirmKill) {
+                if (event == ftxui::Event::Escape || event == ftxui::Event::Character('n')
+                    || event == ftxui::Event::Character('N')) {
+                    controller_.handle_key(27);
+                    return true;
+                }
+                if (event == ftxui::Event::Character('y') || event == ftxui::Event::Character('Y')
+                    || event == ftxui::Event::Return) {
+                    const auto pid = controller_.selected_pid();
+                    const auto result = process_actions.kill_process(pid);
+                    controller_.confirm_kill();
+                    if (result.ok) {
+                        controller_.set_status_text("killed " + std::to_string(pid) + " successfully");
+                        transient_status_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+                    } else {
+                        controller_.set_status_text(result.message);
+                        transient_status_deadline.reset();
+                    }
+                    return true;
                 }
                 return true;
             }
-            return true;
-        }
 
-        if (controller_.mode() == ui::InputMode::Renice) {
-            if (event == ftxui::Event::Escape) {
-                renice_input.clear();
-                controller_.handle_key(27);
-                return true;
-            }
-            if (event == ftxui::Event::Backspace) {
-                if (!renice_input.empty()) {
-                    renice_input.pop_back();
+            if (!shared_input_active && controller_.mode() == ui::InputMode::Renice) {
+                if (event == ftxui::Event::Escape) {
+                    renice_input.clear();
+                    controller_.handle_key(27);
+                    return true;
                 }
-                controller_.set_status_text(
-                    renice_input.empty() ? "Enter new nice value" : "Enter new nice value: " + renice_input);
-                return true;
-            }
-            if (event == ftxui::Event::Return) {
-                if (renice_input.empty()) {
-                    controller_.submit_renice(0);
-                    controller_.set_status_text("invalid nice value");
-                    transient_status_deadline.reset();
-                } else {
-                    try {
-                        const auto pid = controller_.selected_pid();
-                        const auto nice_value = std::stoi(renice_input);
-                        const auto result = process_actions.renice_process(pid, nice_value);
-                        controller_.submit_renice(nice_value);
-                        if (result.ok) {
-                            controller_.set_status_text(
-                                "reniced " + std::to_string(pid) + " to " + std::to_string(nice_value));
-                            transient_status_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
-                        } else {
-                            controller_.set_status_text(result.message);
-                            transient_status_deadline.reset();
-                        }
-                    } catch (const std::exception&) {
+                if (event == ftxui::Event::Backspace) {
+                    if (!renice_input.empty()) {
+                        renice_input.pop_back();
+                    }
+                    controller_.set_status_text(
+                        renice_input.empty() ? std::string{ui::kRenicePrompt}
+                                             : "Enter new nice value: " + renice_input);
+                    return true;
+                }
+                if (event == ftxui::Event::Return) {
+                    if (renice_input.empty()) {
                         controller_.submit_renice(0);
                         controller_.set_status_text("invalid nice value");
                         transient_status_deadline.reset();
+                    } else {
+                        try {
+                            const auto pid = controller_.selected_pid();
+                            const auto nice_value = std::stoi(renice_input);
+                            const auto result = process_actions.renice_process(pid, nice_value);
+                            controller_.submit_renice(nice_value);
+                            if (result.ok) {
+                                controller_.set_status_text(
+                                    "reniced " + std::to_string(pid) + " to " + std::to_string(nice_value));
+                                transient_status_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+                            } else {
+                                controller_.set_status_text(result.message);
+                                transient_status_deadline.reset();
+                            }
+                        } catch (const std::exception&) {
+                            controller_.submit_renice(0);
+                            controller_.set_status_text("invalid nice value");
+                            transient_status_deadline.reset();
+                        }
                     }
+                    renice_input.clear();
+                    return true;
                 }
-                renice_input.clear();
+                if (event.is_character()) {
+                    const auto text = event.character();
+                    if (text.size() == 1) {
+                        const auto ch = text.front();
+                        if (std::isdigit(static_cast<unsigned char>(ch)) != 0 || (ch == '-' && renice_input.empty())) {
+                            renice_input.push_back(ch);
+                            controller_.set_status_text("Enter new nice value: " + renice_input);
+                        }
+                    }
+                    return true;
+                }
                 return true;
             }
-            if (event.is_character()) {
-                const auto text = event.character();
-                if (text.size() == 1) {
-                    const auto ch = text.front();
-                    if (std::isdigit(static_cast<unsigned char>(ch)) != 0 || (ch == '-' && renice_input.empty())) {
-                        renice_input.push_back(ch);
-                        controller_.set_status_text("Enter new nice value: " + renice_input);
-                    }
-                }
+
+            if (!shared_input_active && event == ftxui::Event::Character('q')) {
+                screen.ExitLoopClosure()();
                 return true;
             }
-            return true;
+
+            if (!shared_input_active && (event == ftxui::Event::Character(':') || event == ftxui::Event::Character('/'))) {
+                controller_.handle_key(event.character().front());
+                shared_input_buffer = controller_.shared_input_text();
+                shared_input_cursor = static_cast<int>(shared_input_buffer.size());
+                return true;
+            }
+
+            if (!shared_input_active && (event == ftxui::Event::Character('h') || event == ftxui::Event::Character('l')
+                || event == ftxui::Event::Character('s') || event == ftxui::Event::Character('j')
+                || event == ftxui::Event::Character('k'))) {
+                controller_.handle_key(event.character().front());
+                return true;
+            }
+
+            if (!shared_input_active && (event == ftxui::Event::Character('K') || event == ftxui::Event::Character('R'))) {
+                return handle_process_action(
+                    controller_, visible_processes_for_controller(latest_snapshot, controller_),
+                    event.character().front());
+            }
         }
 
-        if (event == ftxui::Event::Character('q')) {
-            screen.ExitLoopClosure()();
-            return true;
-        }
-
-        if (event == ftxui::Event::Character(':') || event == ftxui::Event::Character('/')) {
-            controller_.handle_key(event.character().front());
-            shared_input_buffer = controller_.shared_input_text();
-            shared_input_cursor = static_cast<int>(shared_input_buffer.size());
-            return true;
-        }
-
-        if (event == ftxui::Event::Character('h') || event == ftxui::Event::Character('l')
-            || event == ftxui::Event::Character('s') || event == ftxui::Event::Character('j')
-            || event == ftxui::Event::Character('k')) {
-            controller_.handle_key(event.character().front());
-            return true;
-        }
-
-        if (event == ftxui::Event::Character('K') || event == ftxui::Event::Character('R')) {
-            return handle_process_action(
-                controller_, visible_processes_for_controller(latest_snapshot, controller_), event.character().front());
+        if (shared_input_active) {
+            return handle_shared_input_event(
+                controller_, shared_input_buffer, shared_input_cursor, event, state_mutex, input_component);
         }
 
         return false;

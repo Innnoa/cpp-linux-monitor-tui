@@ -25,7 +25,7 @@ cmake --build build
 
 - `h/l`: move focus
 - `j/k`: move process selection
-- `/`: open filter and apply live filtering to the process list
+- `/`: open filter and apply live filtering to the process list by name, or by pid when the query is numeric
 - `s`: cycle sort
 - `:`: command bar
 - `K`: open `kill` confirmation for the selected process
@@ -38,7 +38,7 @@ cmake --build build
 ## Current command-bar commands
 
 - `:sort cpu|memory|pid|name`
-- `:filter <text>`
+- `:filter <text>` (`<text>` is matched against process name, or against pid when numeric)
 - `:clear`
 - `:quit`
 - `:kill <pid>`

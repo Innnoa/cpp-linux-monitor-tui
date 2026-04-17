@@ -14,6 +14,12 @@ std::string lowercase(std::string value) {
     });
     return value;
 }
+
+bool is_numeric_query(std::string_view query) {
+    return !query.empty() && std::all_of(query.begin(), query.end(), [](unsigned char ch) {
+        return std::isdigit(ch) != 0;
+    });
+}
 }  // namespace
 
 model::ProcessInfo parse_process_info(
@@ -92,9 +98,16 @@ std::vector<model::ProcessInfo> filter_processes(
     if (needle.empty()) {
         return processes;
     }
+    const auto numeric_query = is_numeric_query(needle);
 
     std::vector<model::ProcessInfo> filtered;
     for (const auto& process : processes) {
+        if (numeric_query) {
+            if (std::to_string(process.pid).find(needle) != std::string::npos) {
+                filtered.push_back(process);
+            }
+            continue;
+        }
         if (lowercase(process.name).find(needle) != std::string::npos) {
             filtered.push_back(process);
         }

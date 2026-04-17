@@ -65,3 +65,30 @@ TEST_CASE("process collector skips memory percent when total memory is zero") {
     CHECK(info.nice_value == 7);
     CHECK(info.memory_percent == 0.0);
 }
+
+TEST_CASE("process collector filters pure numeric queries by pid") {
+    std::vector<monitor::model::ProcessInfo> processes{
+        {812, 'S', 0.0, 0.0, 0, "user", "postgres"},
+        {1812, 'S', 0.0, 0.0, 0, "user", "nginx"},
+        {301, 'S', 0.0, 0.0, 0, "user", "worker812"},
+    };
+
+    const auto filtered = monitor::collector::filter_processes(processes, "812");
+
+    REQUIRE(filtered.size() == 2);
+    CHECK(filtered[0].pid == 812);
+    CHECK(filtered[1].pid == 1812);
+}
+
+TEST_CASE("process collector keeps text queries matching names") {
+    std::vector<monitor::model::ProcessInfo> processes{
+        {812, 'S', 0.0, 0.0, 0, "user", "postgres"},
+        {1812, 'S', 0.0, 0.0, 0, "user", "nginx"},
+        {301, 'S', 0.0, 0.0, 0, "user", "worker812"},
+    };
+
+    const auto filtered = monitor::collector::filter_processes(processes, "worker");
+
+    REQUIRE(filtered.size() == 1);
+    CHECK(filtered[0].pid == 301);
+}

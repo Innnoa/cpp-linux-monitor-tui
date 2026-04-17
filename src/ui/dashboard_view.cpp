@@ -1,6 +1,7 @@
 #include "ui/dashboard_view.h"
 
 #include "collector/process_collector.h"
+#include "ui/theme.h"
 
 #include <iomanip>
 #include <sstream>
@@ -22,23 +23,46 @@ std::string format_mb(std::uint64_t bytes) {
     return std::to_string(mb) + " MB";
 }
 
-ftxui::Element resource_box(const std::string& title, const std::string& summary) {
-    return ftxui::window(ftxui::text(title), ftxui::vbox({
-        ftxui::text(summary),
-        ftxui::separator(),
-        ftxui::text("▁▂▃▄▅▆▅▄"),
-    }));
+std::string process_sort_title(collector::ProcessSortKey sort_key) {
+    switch (sort_key) {
+        case collector::ProcessSortKey::Cpu:
+            return "Processes [sort: cpu]";
+        case collector::ProcessSortKey::Memory:
+            return "Processes [sort: memory]";
+        case collector::ProcessSortKey::Pid:
+            return "Processes [sort: pid]";
+        case collector::ProcessSortKey::Name:
+            return "Processes [sort: name]";
+    }
+    return "Processes";
+}
+
+ftxui::Element resource_box(
+    const std::string& title,
+    const std::string& summary,
+    ftxui::Color accent_color,
+    bool focused) {
+    const auto& theme = catppuccin_mocha();
+    return themed_window(title,
+                         ftxui::vbox({
+                             ftxui::text(summary) | ftxui::color(theme.text),
+                             ftxui::separator() | ftxui::color(theme.surface2),
+                             ftxui::text("▁▂▃▄▅▆▅▄") | ftxui::color(accent_color) | ftxui::bold,
+                         }),
+                         focused);
 }
 }  // namespace
 
 ftxui::Element render_dashboard_body_document(const model::SystemSnapshot& snapshot, const AppController& controller) {
+    const auto& theme = catppuccin_mocha();
     const auto header = ftxui::hbox({
-        ftxui::text("host: local"),
-        ftxui::separator(),
-        ftxui::text("refresh " + std::to_string(controller.refresh_interval().count()) + "ms"),
-        ftxui::separator(),
-        ftxui::text("tab: proc"),
-    });
+        ftxui::text("host: local") | ftxui::color(theme.subtext1),
+        ftxui::separator() | ftxui::color(theme.surface2),
+        ftxui::text("refresh " + std::to_string(controller.refresh_interval().count()) + "ms")
+            | ftxui::color(theme.subtext1),
+        ftxui::separator() | ftxui::color(theme.surface2),
+        ftxui::text("tab: proc") | ftxui::color(theme.rosewater) | ftxui::bold,
+    }) | ftxui::bgcolor(theme.base);
 
     const auto cpu_summary = format_percent(snapshot.cpu.total_percent);
     const auto memory_summary =
@@ -55,17 +79,19 @@ ftxui::Element render_dashboard_body_document(const model::SystemSnapshot& snaps
     }
 
     const auto resources = ftxui::gridbox({
-        {resource_box("CPU", cpu_summary), resource_box("Memory", memory_summary)},
-        {resource_box("Disk", disk_summary), resource_box("Network", network_summary)},
+        {resource_box("CPU", cpu_summary, theme.red, controller.focus() == app::FocusZone::Cpu),
+         resource_box("Memory", memory_summary, theme.green, controller.focus() == app::FocusZone::Memory)},
+        {resource_box("Disk", disk_summary, theme.peach, controller.focus() == app::FocusZone::Disk),
+         resource_box("Network", network_summary, theme.sapphire, controller.focus() == app::FocusZone::Network)},
     });
 
     auto visible_processes =
         collector::filter_processes(collector::sort_processes(snapshot.processes, controller.sort_key()),
                                     controller.filter_query());
     std::vector<ftxui::Element> process_rows;
-    process_rows.push_back(ftxui::text("PID   S   CPU   MEM   USER    NAME"));
+    process_rows.push_back(ftxui::text("PID   S   CPU   MEM   USER    NAME") | ftxui::color(theme.blue) | ftxui::bold);
     if (visible_processes.empty()) {
-        process_rows.push_back(ftxui::text("no matching processes"));
+        process_rows.push_back(ftxui::text("no matching processes") | ftxui::color(theme.peach));
     } else {
         const auto selected_index = std::min(controller.selected_process_index(), visible_processes.size() - 1);
         const auto start_index = std::min(controller.process_window_start(), visible_processes.size() - 1);
@@ -78,17 +104,26 @@ ftxui::Element render_dashboard_body_document(const model::SystemSnapshot& snaps
             line << process.pid << "   " << process.state << "   " << std::fixed << std::setprecision(0)
                  << process.cpu_percent << "    " << std::setprecision(1) << process.memory_percent << "   "
                  << process.user << "    " << process.name;
-            process_rows.push_back(ftxui::text(line.str()));
+            auto row = ftxui::text(line.str());
+            if (index == selected_index) {
+                row = row | ftxui::color(theme.text) | ftxui::bgcolor(theme.surface0) | ftxui::bold;
+            } else {
+                row = row | ftxui::color(theme.subtext1);
+            }
+            process_rows.push_back(std::move(row));
         }
     }
-    process_rows.push_back(ftxui::text("h/l focus · j/k select · / filter · : command · K kill · R renice · q quit"));
+    process_rows.push_back(ftxui::text("h/l focus · j/k select · / filter · : command · K kill · R renice · q quit")
+                               | ftxui::color(theme.overlay1) | ftxui::dim);
 
-    const auto process_list = ftxui::window(ftxui::text("Processes"), ftxui::vbox(process_rows));
+    const auto process_list = themed_window(
+        process_sort_title(controller.sort_key()), ftxui::vbox(process_rows),
+        controller.focus() == app::FocusZone::Processes);
 
     ftxui::Element detail_body;
     if (visible_processes.empty()) {
         detail_body = ftxui::vbox({
-            ftxui::text("No process selected"),
+            ftxui::text("No process selected") | ftxui::color(theme.overlay1),
         });
     } else {
         const auto selected_index = std::min(controller.selected_process_index(), visible_processes.size() - 1);
@@ -96,35 +131,51 @@ ftxui::Element render_dashboard_body_document(const model::SystemSnapshot& snaps
         std::ostringstream memory_line;
         memory_line << std::fixed << std::setprecision(1) << selected.memory_percent;
         detail_body = ftxui::vbox({
-            ftxui::text("PID: " + std::to_string(selected.pid)),
-            ftxui::text("Name: " + selected.name),
-            ftxui::text("User: " + selected.user),
-            ftxui::text(std::string{"State: "} + selected.state),
-            ftxui::text("Memory %: " + memory_line.str()),
-            ftxui::text("Nice: " + std::to_string(selected.nice_value)),
-            ftxui::separator(),
-            ftxui::text("K kill"),
-            ftxui::text("R renice"),
+            ftxui::text("PID: " + std::to_string(selected.pid)) | ftxui::color(theme.text),
+            ftxui::text("Name: " + selected.name) | ftxui::color(theme.text),
+            ftxui::text("User: " + selected.user) | ftxui::color(theme.text),
+            ftxui::text(std::string{"State: "} + selected.state) | ftxui::color(theme.text),
+            ftxui::text("Memory %: " + memory_line.str()) | ftxui::color(theme.text),
+            ftxui::text("Nice: " + std::to_string(selected.nice_value)) | ftxui::color(theme.text),
+            ftxui::separator() | ftxui::color(theme.surface2),
+            ftxui::text("K kill") | ftxui::color(theme.red) | ftxui::bold,
+            ftxui::text("R renice") | ftxui::color(theme.peach) | ftxui::bold,
         });
     }
-    const auto detail = ftxui::window(ftxui::text("Selected Process"), detail_body);
+    const auto detail = themed_window("Selected Process", detail_body, false);
     const auto lower = ftxui::hbox({
         process_list | ftxui::flex,
         detail | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, 32),
     });
 
-    return ftxui::vbox({header, ftxui::separator(), resources, ftxui::separator(), lower});
+    return ftxui::vbox({
+               header,
+               ftxui::separator() | ftxui::color(theme.surface2),
+               resources,
+               ftxui::separator() | ftxui::color(theme.surface2),
+               lower,
+           })
+           | ftxui::bgcolor(theme.base);
 }
 
 ftxui::Element render_dashboard_bottom_bar_document(const AppController& controller) {
+    const auto& theme = catppuccin_mocha();
     if (controller.shared_input_active()) {
         return ftxui::hbox({
-            ftxui::window(ftxui::text("Input"), ftxui::text(controller.command_text())) | ftxui::flex,
-            ftxui::window(ftxui::text("Status"), ftxui::text(controller.status_text()))
+            themed_window(
+                "Input",
+                ftxui::text(controller.command_text()) | ftxui::color(theme.text),
+                controller.focus() == app::FocusZone::CommandBar)
+                | ftxui::flex,
+            themed_window("Status", ftxui::text(controller.status_text()) | ftxui::color(status_color(controller.status_text())), false)
                 | ftxui::size(ftxui::WIDTH, ftxui::GREATER_THAN, 28),
-        });
+        }) | ftxui::bgcolor(theme.base);
     }
-    return ftxui::window(ftxui::text("Status"), ftxui::text(controller.status_text()));
+    return themed_window(
+               "Status",
+               ftxui::text(controller.status_text()) | ftxui::color(status_color(controller.status_text())),
+               controller.focus() == app::FocusZone::CommandBar)
+           | ftxui::bgcolor(theme.base);
 }
 
 ftxui::Element render_dashboard_document(

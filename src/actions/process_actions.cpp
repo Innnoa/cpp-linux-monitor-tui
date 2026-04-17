@@ -19,6 +19,19 @@ std::string friendly_message(const std::error_code& error) {
     }
     return error.message();
 }
+
+std::string friendly_renice_message(const std::error_code& error) {
+    if (!error) {
+        return "ok";
+    }
+    if (error == std::errc::permission_denied || error == std::errc::operation_not_permitted) {
+        return "permission denied: lowering nice usually requires root or CAP_SYS_NICE";
+    }
+    if (error == std::errc::no_such_process) {
+        return "process no longer exists";
+    }
+    return error.message();
+}
 }  // namespace
 
 std::error_code PosixProcessMutator::send_signal(int pid, int signal_number) {
@@ -51,7 +64,7 @@ ActionResult ProcessActions::renice_process(int pid, int nice_value) {
         return {.ok = false, .message = "nice value must be between -20 and 19"};
     }
     const auto error = mutator_.set_priority(pid, nice_value);
-    return {.ok = !error, .message = friendly_message(error)};
+    return {.ok = !error, .message = friendly_renice_message(error)};
 }
 
 }  // namespace monitor::actions

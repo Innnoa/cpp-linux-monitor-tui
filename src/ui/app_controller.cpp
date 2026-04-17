@@ -232,7 +232,7 @@ void AppController::begin_renice(int pid) {
     }
     selected_pid_ = pid;
     mode_ = InputMode::Renice;
-    status_text_ = "Enter new nice value";
+    status_text_ = std::string{kRenicePrompt};
 }
 
 void AppController::confirm_kill() {

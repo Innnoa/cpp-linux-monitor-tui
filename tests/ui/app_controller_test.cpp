@@ -229,7 +229,7 @@ TEST_CASE("controller isolates renice mode") {
     controller.begin_renice(900);
     CHECK(controller.mode() == monitor::ui::InputMode::Renice);
     CHECK(controller.selected_pid() == 900);
-    CHECK(controller.status_text() == "Enter new nice value");
+    CHECK(controller.status_text() == "Enter new nice value (-20..19, negative needs root/CAP_SYS_NICE)");
 
     controller.handle_key(':');
     CHECK(controller.mode() == monitor::ui::InputMode::Renice);
@@ -259,7 +259,7 @@ TEST_CASE("controller isolates confirm and renice modes") {
     controller.begin_renice(441);
     CHECK(controller.mode() == monitor::ui::InputMode::Renice);
     CHECK(controller.selected_pid() == 441);
-    CHECK(controller.status_text() == "Enter new nice value");
+    CHECK(controller.status_text() == "Enter new nice value (-20..19, negative needs root/CAP_SYS_NICE)");
     controller.handle_key(':');
     CHECK(controller.mode() == monitor::ui::InputMode::Renice);
     controller.submit_renice(5);

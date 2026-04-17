@@ -99,6 +99,17 @@ TEST_CASE("renice action maps no such process") {
     CHECK(result.message == "process no longer exists");
 }
 
+TEST_CASE("renice action explains privilege requirements on permission errors") {
+    FakeMutator mutator;
+    mutator.renice_error = std::make_error_code(std::errc::permission_denied);
+    monitor::actions::ProcessActions actions(mutator);
+
+    const auto result = actions.renice_process(812, -5);
+
+    CHECK_FALSE(result.ok);
+    CHECK(result.message == "permission denied: lowering nice usually requires root or CAP_SYS_NICE");
+}
+
 TEST_CASE("renice action returns ok on success") {
     FakeMutator mutator;
     monitor::actions::ProcessActions actions(mutator);

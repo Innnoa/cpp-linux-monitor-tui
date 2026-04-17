@@ -10,6 +10,9 @@
 
 namespace monitor::ui {
 
+inline constexpr std::string_view kRenicePrompt =
+    "Enter new nice value (-20..19, negative needs root/CAP_SYS_NICE)";
+
 enum class InputMode {
     Normal,
     Filter,
