@@ -282,7 +282,13 @@ int Application::run() {
             history_.network_rx_history.push(static_cast<double>(latest_snapshot.interfaces.front().rx_bytes_per_sec));
             history_.network_tx_history.push(static_cast<double>(latest_snapshot.interfaces.front().tx_bytes_per_sec));
         }
-        return ui::render_dashboard_to_string(latest_snapshot, controller_, history_, 120, 40);
+        render_cache_.update_snapshot(latest_snapshot);
+        render_cache_.update_history(history_);
+        if (render_cache_.is_dirty()) {
+            auto rendered = ui::render_dashboard_to_string(latest_snapshot, controller_, history_, 120, 40);
+            render_cache_.set_cached_render_string(std::move(rendered));
+        }
+        return render_cache_.cached_render_string();
     };
 
     if (!::isatty(STDIN_FILENO) || !::isatty(STDOUT_FILENO)) {
@@ -488,6 +494,8 @@ int Application::run() {
                     history_.network_rx_history.push(static_cast<double>(latest_snapshot.interfaces.front().rx_bytes_per_sec));
                     history_.network_tx_history.push(static_cast<double>(latest_snapshot.interfaces.front().tx_bytes_per_sec));
                 }
+                render_cache_.update_snapshot(latest_snapshot);
+                render_cache_.update_history(history_);
             }
             screen.PostEvent(ftxui::Event::Custom);
             std::this_thread::sleep_for(config_.refresh_interval);

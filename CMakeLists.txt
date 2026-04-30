@@ -62,6 +62,7 @@ set(MONITOR_CORE_SOURCES
   src/collector/process_collector.cpp
   src/actions/process_actions.cpp
   src/ui/app_controller.cpp
+  src/ui/render_cache.cpp
   src/ui/progress_bar.cpp
   src/ui/sparkline_chart.cpp
   src/ui/process_list.cpp)
