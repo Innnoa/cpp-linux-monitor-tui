@@ -51,6 +51,7 @@ if(Catch2_FOUND AND Catch2_DIR)
 endif()
 
 set(MONITOR_CORE_SOURCES
+  src/model/history_data.cpp
   src/store/snapshot_store.cpp
   src/app/application.cpp
   src/app/sampling_worker.cpp
@@ -106,6 +107,7 @@ if(BUILD_TESTING)
   endif()
 
   set(MONITOR_TEST_SOURCES
+    tests/model/history_data_test.cpp
     tests/app/app_config_test.cpp
     tests/app/application_test.cpp
     tests/store/snapshot_store_test.cpp
