@@ -1,6 +1,10 @@
 #include "ui/dashboard_view.h"
 
 #include "collector/process_collector.h"
+#include "model/history_data.h"
+#include "ui/process_list.h"
+#include "ui/progress_bar.h"
+#include "ui/sparkline_chart.h"
 #include "ui/theme.h"
 
 #include <iomanip>
@@ -23,6 +27,24 @@ std::string format_mb(std::uint64_t bytes) {
     return std::to_string(mb) + " MB";
 }
 
+std::string format_gb(std::uint64_t bytes) {
+    const auto gb = static_cast<double>(bytes) / (1024.0 * 1024.0 * 1024.0);
+    std::ostringstream output;
+    output << std::fixed << std::setprecision(1) << gb << " GB";
+    return output.str();
+}
+
+std::string format_speed(std::uint64_t bytes_per_sec) {
+    if (bytes_per_sec >= 1024ULL * 1024ULL) {
+        const auto mb = static_cast<double>(bytes_per_sec) / (1024.0 * 1024.0);
+        std::ostringstream output;
+        output << std::fixed << std::setprecision(1) << mb << " MB/s";
+        return output.str();
+    }
+    const auto kb = bytes_per_sec / 1024ULL;
+    return std::to_string(kb) + " KB/s";
+}
+
 std::string process_sort_title(collector::ProcessSortKey sort_key) {
     switch (sort_key) {
         case collector::ProcessSortKey::Cpu:
@@ -37,24 +59,116 @@ std::string process_sort_title(collector::ProcessSortKey sort_key) {
     return "Processes";
 }
 
-ftxui::Element resource_box(
+ftxui::Element resource_panel(
     const std::string& title,
+    double percentage,
+    std::span<const double> history,
     const std::string& summary,
     ftxui::Color accent_color,
-    bool focused) {
+    ftxui::Color low_color,
+    ftxui::Color medium_color,
+    ftxui::Color high_color,
+    bool focused,
+    int bar_width) {
     const auto& theme = catppuccin_mocha();
-    return themed_window(title,
-                         ftxui::vbox({
-                             ftxui::text(summary) | ftxui::color(theme.text),
-                             ftxui::separator() | ftxui::color(theme.surface2),
-                             ftxui::text("▁▂▃▄▅▆▅▄") | ftxui::color(accent_color) | ftxui::bold,
-                         }),
-                         focused);
+    ProgressBarConfig bar_config;
+    bar_config.width = bar_width;
+    bar_config.show_percentage = true;
+
+    SparklineConfig spark_config;
+    spark_config.width = bar_width + 6;
+    spark_config.show_latest = false;
+
+    return themed_window(
+        title,
+        ftxui::vbox({
+            ftxui::text(summary) | ftxui::color(theme.text),
+            progress_bar(percentage, bar_config, low_color, medium_color, high_color),
+            sparkline_chart(history, accent_color, spark_config),
+        }),
+        focused);
 }
+
+ftxui::Element render_left_panel(
+    const model::SystemSnapshot& snapshot,
+    const AppController& controller,
+    const model::HistoryData& history) {
+    const auto& theme = catppuccin_mocha();
+
+    const auto cpu_summary = "Total: " + format_percent(snapshot.cpu.total_percent);
+    const auto mem_pct = (snapshot.memory.total_bytes > 0)
+                             ? (static_cast<double>(snapshot.memory.used_bytes) / snapshot.memory.total_bytes * 100.0)
+                             : 0.0;
+    const auto mem_summary = format_gb(snapshot.memory.used_bytes) + " / " + format_gb(snapshot.memory.total_bytes);
+
+    constexpr int kBarWidth = 24;
+
+    auto cpu_panel = resource_panel(
+        "CPU", snapshot.cpu.total_percent, history.cpu_history.data(), cpu_summary,
+        theme.red, theme.green, theme.peach, theme.red,
+        controller.focus() == app::FocusZone::Cpu, kBarWidth);
+
+    auto mem_panel = resource_panel(
+        "Memory", mem_pct, history.memory_history.data(), mem_summary,
+        theme.green, theme.green, theme.peach, theme.red,
+        controller.focus() == app::FocusZone::Memory, kBarWidth);
+
+    return ftxui::vbox({
+        std::move(cpu_panel),
+        std::move(mem_panel),
+    });
+}
+
+ftxui::Element render_right_panel(
+    const model::SystemSnapshot& snapshot,
+    const AppController& controller,
+    const model::HistoryData& history) {
+    const auto& theme = catppuccin_mocha();
+
+    std::string disk_summary = "n/a";
+    double disk_pct = 0.0;
+    if (!snapshot.disks.empty()) {
+        const auto& disk = snapshot.disks.front();
+        disk_pct = disk.used_percent;
+        disk_summary = disk.label + " " + format_percent(disk.used_percent);
+    }
+
+    std::string network_summary = "n/a";
+    double network_pct = 0.0;
+    if (!snapshot.interfaces.empty()) {
+        const auto& net = snapshot.interfaces.front();
+        const auto total_speed = net.rx_bytes_per_sec + net.tx_bytes_per_sec;
+        network_summary = net.interface_name + " " + format_speed(total_speed);
+        constexpr std::uint64_t kMaxSpeed = 125000000ULL;  // 1 Gbps
+        network_pct = std::min(100.0, static_cast<double>(total_speed) / kMaxSpeed * 100.0);
+    }
+
+    constexpr int kBarWidth = 20;
+
+    auto disk_panel = resource_panel(
+        "Disk", disk_pct, history.disk_read_history.data(), disk_summary,
+        theme.peach, theme.green, theme.peach, theme.red,
+        controller.focus() == app::FocusZone::Disk, kBarWidth);
+
+    auto net_panel = resource_panel(
+        "Network", network_pct, history.network_rx_history.data(), network_summary,
+        theme.sapphire, theme.green, theme.peach, theme.red,
+        controller.focus() == app::FocusZone::Network, kBarWidth);
+
+    return ftxui::vbox({
+        std::move(disk_panel),
+        std::move(net_panel),
+    });
+}
+
 }  // namespace
 
-ftxui::Element render_dashboard_body_document(const model::SystemSnapshot& snapshot, const AppController& controller) {
+ftxui::Element render_dashboard_body_document(
+    const model::SystemSnapshot& snapshot,
+    const AppController& controller,
+    const model::HistoryData& history) {
     const auto& theme = catppuccin_mocha();
+
     const auto header = ftxui::hbox({
         ftxui::text("host: local") | ftxui::color(theme.subtext1),
         ftxui::separator() | ftxui::color(theme.surface2),
@@ -64,61 +178,26 @@ ftxui::Element render_dashboard_body_document(const model::SystemSnapshot& snaps
         ftxui::text("tab: proc") | ftxui::color(theme.rosewater) | ftxui::bold,
     }) | ftxui::bgcolor(theme.base);
 
-    const auto cpu_summary = format_percent(snapshot.cpu.total_percent);
-    const auto memory_summary =
-        format_mb(snapshot.memory.used_bytes) + " / " + format_mb(snapshot.memory.total_bytes);
-    std::string disk_summary = "n/a";
-    if (!snapshot.disks.empty()) {
-        const auto& disk = snapshot.disks.front();
-        disk_summary = disk.label + " " + format_percent(disk.used_percent);
-    }
-    std::string network_summary = "n/a";
-    if (!snapshot.interfaces.empty()) {
-        const auto& network = snapshot.interfaces.front();
-        network_summary = network.interface_name + " " + format_mb(network.rx_bytes_per_sec) + "/s";
-    }
+    auto left = render_left_panel(snapshot, controller, history);
+    auto right = render_right_panel(snapshot, controller, history);
 
-    const auto resources = ftxui::gridbox({
-        {resource_box("CPU", cpu_summary, theme.red, controller.focus() == app::FocusZone::Cpu),
-         resource_box("Memory", memory_summary, theme.green, controller.focus() == app::FocusZone::Memory)},
-        {resource_box("Disk", disk_summary, theme.peach, controller.focus() == app::FocusZone::Disk),
-         resource_box("Network", network_summary, theme.sapphire, controller.focus() == app::FocusZone::Network)},
+    const auto resource_row = ftxui::hbox({
+        left | ftxui::flex,
+        ftxui::separator() | ftxui::color(theme.surface2),
+        right | ftxui::flex,
     });
 
     auto visible_processes =
         collector::filter_processes(collector::sort_processes(snapshot.processes, controller.sort_key()),
                                     controller.filter_query());
-    std::vector<ftxui::Element> process_rows;
-    process_rows.push_back(ftxui::text("PID   S   CPU   MEM   USER    NAME") | ftxui::color(theme.blue) | ftxui::bold);
-    if (visible_processes.empty()) {
-        process_rows.push_back(ftxui::text("no matching processes") | ftxui::color(theme.peach));
-    } else {
-        const auto selected_index = std::min(controller.selected_process_index(), visible_processes.size() - 1);
-        const auto start_index = std::min(controller.process_window_start(), visible_processes.size() - 1);
-        const auto end_index =
-            std::min(visible_processes.size(), start_index + std::max<std::size_t>(1, controller.process_window_height()));
-        for (std::size_t index = start_index; index < end_index; ++index) {
-            const auto& process = visible_processes[index];
-            std::ostringstream line;
-            line << ((index == selected_index) ? "> " : "  ");
-            line << process.pid << "   " << process.state << "   " << std::fixed << std::setprecision(0)
-                 << process.cpu_percent << "    " << std::setprecision(1) << process.memory_percent << "   "
-                 << process.user << "    " << process.name;
-            auto row = ftxui::text(line.str());
-            if (index == selected_index) {
-                row = row | ftxui::color(theme.text) | ftxui::bgcolor(theme.surface0) | ftxui::bold;
-            } else {
-                row = row | ftxui::color(theme.subtext1);
-            }
-            process_rows.push_back(std::move(row));
-        }
-    }
-    process_rows.push_back(ftxui::text("h/l focus · j/k select · / filter · : command · K kill · R renice · q quit")
-                               | ftxui::color(theme.overlay1) | ftxui::dim);
 
-    const auto process_list = themed_window(
-        process_sort_title(controller.sort_key()), ftxui::vbox(process_rows),
-        controller.focus() == app::FocusZone::Processes);
+    ProcessColorScheme color_scheme;
+    const auto process_element = process_list(
+        visible_processes,
+        controller.selected_process_index(),
+        controller.process_window_start(),
+        controller.process_window_height(),
+        color_scheme);
 
     ftxui::Element detail_body;
     if (visible_processes.empty()) {
@@ -142,18 +221,27 @@ ftxui::Element render_dashboard_body_document(const model::SystemSnapshot& snaps
             ftxui::text("R renice") | ftxui::color(theme.peach) | ftxui::bold,
         });
     }
+
     const auto detail = themed_window("Selected Process", detail_body, false);
-    const auto lower = ftxui::hbox({
-        process_list | ftxui::flex,
+    const auto process_area = ftxui::hbox({
+        themed_window(process_sort_title(controller.sort_key()),
+                      ftxui::vbox({
+                          process_element,
+                          ftxui::separator() | ftxui::color(theme.surface2),
+                          ftxui::text("h/l focus · j/k select · / filter · : command · K kill · R renice · q quit")
+                              | ftxui::color(theme.overlay1) | ftxui::dim,
+                      }),
+                      controller.focus() == app::FocusZone::Processes)
+            | ftxui::flex,
         detail | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, 32),
     });
 
     return ftxui::vbox({
                header,
                ftxui::separator() | ftxui::color(theme.surface2),
-               resources,
+               resource_row,
                ftxui::separator() | ftxui::color(theme.surface2),
-               lower,
+               process_area,
            })
            | ftxui::bgcolor(theme.base);
 }
@@ -181,10 +269,11 @@ ftxui::Element render_dashboard_bottom_bar_document(const AppController& control
 ftxui::Element render_dashboard_document(
     const model::SystemSnapshot& snapshot,
     const AppController& controller,
+    const model::HistoryData& history,
     int width,
     int height) {
     auto document =
-        ftxui::vbox({render_dashboard_body_document(snapshot, controller), render_dashboard_bottom_bar_document(controller)});
+        ftxui::vbox({render_dashboard_body_document(snapshot, controller, history), render_dashboard_bottom_bar_document(controller)});
     return document | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, width)
            | ftxui::size(ftxui::HEIGHT, ftxui::EQUAL, height);
 }
@@ -192,9 +281,10 @@ ftxui::Element render_dashboard_document(
 std::string render_dashboard_to_string(
     const model::SystemSnapshot& snapshot,
     const AppController& controller,
+    const model::HistoryData& history,
     int width,
     int height) {
-    auto document = render_dashboard_document(snapshot, controller, width, height);
+    auto document = render_dashboard_document(snapshot, controller, history, width, height);
     auto screen = ftxui::Screen(width, height);
     ftxui::Render(screen, document);
     return screen.ToString();

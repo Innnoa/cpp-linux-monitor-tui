@@ -19,6 +19,7 @@
 
 #include "app/sampling_worker.h"
 #include "actions/process_actions.h"
+#include "model/history_data.h"
 #include "collector/cpu_collector.h"
 #include "collector/disk_collector.h"
 #include "collector/memory_collector.h"
@@ -268,7 +269,20 @@ int Application::run() {
     const auto render_once = [&]() {
         controller_.set_process_window_height(visible_process_rows_for_terminal_height(40));
         refresh_snapshot(worker, store_, controller_, latest_snapshot, transient_status_deadline);
-        return ui::render_dashboard_to_string(latest_snapshot, controller_, 120, 40);
+        history_.cpu_history.push(latest_snapshot.cpu.total_percent);
+        double mem_pct = (latest_snapshot.memory.total_bytes > 0)
+                             ? (static_cast<double>(latest_snapshot.memory.used_bytes) / latest_snapshot.memory.total_bytes * 100.0)
+                             : 0.0;
+        history_.memory_history.push(mem_pct);
+        if (!latest_snapshot.disks.empty()) {
+            history_.disk_read_history.push(static_cast<double>(latest_snapshot.disks.front().read_bytes_per_sec));
+            history_.disk_write_history.push(static_cast<double>(latest_snapshot.disks.front().write_bytes_per_sec));
+        }
+        if (!latest_snapshot.interfaces.empty()) {
+            history_.network_rx_history.push(static_cast<double>(latest_snapshot.interfaces.front().rx_bytes_per_sec));
+            history_.network_tx_history.push(static_cast<double>(latest_snapshot.interfaces.front().tx_bytes_per_sec));
+        }
+        return ui::render_dashboard_to_string(latest_snapshot, controller_, history_, 120, 40);
     };
 
     if (!::isatty(STDIN_FILENO) || !::isatty(STDOUT_FILENO)) {
@@ -323,7 +337,7 @@ int Application::run() {
         const auto terminal_size = ftxui::Terminal::Size();
         controller_.set_process_window_height(visible_process_rows_for_terminal_height(terminal_size.dimy));
         return ftxui::vbox({
-            ui::render_dashboard_body_document(latest_snapshot, controller_)
+            ui::render_dashboard_body_document(latest_snapshot, controller_, history_)
                 | ftxui::size(ftxui::WIDTH, ftxui::EQUAL, terminal_size.dimx)
                 | ftxui::size(ftxui::HEIGHT, ftxui::EQUAL, terminal_size.dimy - 3),
             input_bar_document(controller_, controller_.status_text(), input_component),
@@ -461,6 +475,19 @@ int Application::run() {
             {
                 std::scoped_lock lock(state_mutex);
                 refresh_snapshot(worker, store_, controller_, latest_snapshot, transient_status_deadline);
+                history_.cpu_history.push(latest_snapshot.cpu.total_percent);
+                double mem_pct = (latest_snapshot.memory.total_bytes > 0)
+                                     ? (static_cast<double>(latest_snapshot.memory.used_bytes) / latest_snapshot.memory.total_bytes * 100.0)
+                                     : 0.0;
+                history_.memory_history.push(mem_pct);
+                if (!latest_snapshot.disks.empty()) {
+                    history_.disk_read_history.push(static_cast<double>(latest_snapshot.disks.front().read_bytes_per_sec));
+                    history_.disk_write_history.push(static_cast<double>(latest_snapshot.disks.front().write_bytes_per_sec));
+                }
+                if (!latest_snapshot.interfaces.empty()) {
+                    history_.network_rx_history.push(static_cast<double>(latest_snapshot.interfaces.front().rx_bytes_per_sec));
+                    history_.network_tx_history.push(static_cast<double>(latest_snapshot.interfaces.front().tx_bytes_per_sec));
+                }
             }
             screen.PostEvent(ftxui::Event::Custom);
             std::this_thread::sleep_for(config_.refresh_interval);
