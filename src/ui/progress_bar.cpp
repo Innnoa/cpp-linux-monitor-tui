@@ -76,10 +76,11 @@ ftxui::Element progress_bar(
 
     const auto color = threshold_color(percentage, low_color, medium_color, high_color);
 
+    const auto clamped_pct = std::clamp(percentage, 0.0, 100.0);
     std::ostringstream display;
     display << bar;
     if (config.show_percentage) {
-        display << " " << std::fixed << std::setprecision(0) << percentage << "%";
+        display << " " << std::fixed << std::setprecision(0) << clamped_pct << "%";
     }
 
     return ftxui::text(display.str()) | ftxui::color(color);

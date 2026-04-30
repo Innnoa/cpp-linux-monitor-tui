@@ -11,7 +11,6 @@ struct ProgressBarConfig {
     std::string filled_char = "■";
     std::string empty_char = "□";
     bool show_percentage = true;
-    bool show_value = false;
 };
 
 ftxui::Element progress_bar(
