@@ -15,6 +15,15 @@ cmake --build build
 ./build/monitor_tui
 ~~~
 
+## Features
+
+- **Left-right panel layout** — CPU and Memory stats on the left, Disk and Network on the right
+- **Progress bars** with color-coded thresholds: green (< 50%), orange (50–80%), red (> 80%)
+- **Sparkline trend charts** showing historical data for CPU, Memory, Disk, and Network
+- **Process list** with color coding: zombie → red, high CPU → red, running → green
+- **Ring buffer** history storage for efficient trend data
+- **Render cache** for optimized refresh performance
+
 ## Current status
 
 - In a real TTY, `monitor_tui` runs a minimal live dashboard loop and refreshes from local `/proc` data.
