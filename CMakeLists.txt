@@ -62,7 +62,8 @@ set(MONITOR_CORE_SOURCES
   src/collector/process_collector.cpp
   src/actions/process_actions.cpp
   src/ui/app_controller.cpp
-  src/ui/progress_bar.cpp)
+  src/ui/progress_bar.cpp
+  src/ui/sparkline_chart.cpp)
 if(MONITOR_HAS_FTXUI)
   list(APPEND MONITOR_CORE_SOURCES src/ui/dashboard_view.cpp)
 endif()
@@ -116,7 +117,8 @@ if(BUILD_TESTING)
     tests/collector/process_collector_test.cpp
     tests/actions/process_actions_test.cpp
     tests/ui/app_controller_test.cpp
-    tests/ui/progress_bar_test.cpp)
+    tests/ui/progress_bar_test.cpp
+    tests/ui/sparkline_chart_test.cpp)
   if(MONITOR_HAS_FTXUI)
     list(APPEND MONITOR_TEST_SOURCES tests/ui/dashboard_view_test.cpp)
   else()
