@@ -2,17 +2,38 @@
 
 Local Linux terminal monitor built with `C++` and `FTXUI`.
 
-## Build
+## Requirements
+
+- Linux (reads `/proc` filesystem)
+- C++20 compiler (GCC 10+ or Clang 12+)
+- CMake 3.20+
+
+## Quick Start
 
 ~~~bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+# Clone
+git clone https://github.com/your-username/cpp-linux-monitor-tui.git
+cd cpp-linux-monitor-tui
+
+# Build (auto-downloads dependencies)
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DMONITOR_FETCH_DEPS=ON
 cmake --build build
+
+# Run
+./build/monitor_tui
 ~~~
 
-## Run
+## Install (optional)
 
 ~~~bash
-./build/monitor_tui
+# Install to ~/.local/bin (no sudo needed)
+mkdir -p ~/.local/bin
+cp build/monitor_tui ~/.local/bin/zazaki_tui
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+
+# Now you can run from anywhere
+zazaki_tui
 ~~~
 
 ## Features
