@@ -1,9 +1,10 @@
 #include "ui/sparkline_chart.h"
 
 #include <algorithm>
+#include <cmath>
 #include <iomanip>
 #include <sstream>
-#include <cmath>
+#include <vector>
 
 namespace monitor::ui {
 
@@ -29,7 +30,19 @@ std::string format_sparkline(
         return {};
     }
 
-    const auto [min_it, max_it] = std::minmax_element(data.begin(), data.end());
+    std::vector<double> filtered;
+    filtered.reserve(data.size());
+    for (const auto v : data) {
+        if (std::isfinite(v)) {
+            filtered.push_back(v);
+        }
+    }
+
+    if (filtered.empty()) {
+        return {};
+    }
+
+    const auto [min_it, max_it] = std::minmax_element(filtered.begin(), filtered.end());
     const auto min_val = *min_it;
     const auto max_val = *max_it;
     const auto range = max_val - min_val;
@@ -37,14 +50,14 @@ std::string format_sparkline(
     std::string result;
     result.reserve(width * 3);
 
-    const auto step = static_cast<double>(data.size()) / width;
+    const auto step = static_cast<double>(filtered.size()) / width;
     for (int i = 0; i < width; ++i) {
         const auto index = static_cast<std::size_t>(i * step);
-        if (index >= data.size()) {
+        if (index >= filtered.size()) {
             break;
         }
 
-        const auto value = data[index];
+        const auto value = filtered[index];
         const auto normalized = (range > 0.0) ? ((value - min_val) / range) : 0.5;
         result.append(spark_char(normalized));
     }

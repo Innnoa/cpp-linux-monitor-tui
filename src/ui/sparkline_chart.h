@@ -7,10 +7,8 @@
 namespace monitor::ui {
 
 struct SparklineConfig {
-    int height = 2;
     int width = 40;
     bool show_latest = true;
-    bool show_min_max = false;
 };
 
 ftxui::Element sparkline_chart(
